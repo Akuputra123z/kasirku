@@ -37,11 +37,14 @@ class IdentifyTenant
         $host = $request->getHost();
         $parts = explode('.', $host);
 
-        // Skip subdomain detection for IP addresses (e.g. 127.0.0.1, ::1)
+        // Subdomain detection — only claim the tenant if it actually exists,
+        // otherwise fall through to query param / cookie / header check.
         if (count($parts) > 2 && ! filter_var($host, FILTER_VALIDATE_IP)) {
             $slug = $parts[0];
 
-            return Tenant::where('slug', $slug)->first();
+            if ($tenant = Tenant::where('slug', $slug)->first()) {
+                return $tenant;
+            }
         }
 
         if ($slug = $request->query('tenant') ?: $request->cookie('tenant') ?: $request->header('X-Tenant')) {

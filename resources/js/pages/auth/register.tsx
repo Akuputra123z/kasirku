@@ -53,17 +53,29 @@ export default function Register() {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
                 },
                 body: JSON.stringify(form),
             });
 
-            const data = await res.json();
+            let data;
+            try {
+                data = await res.json();
+            } catch {
+                setErrors({ form: 'Terjadi kesalahan. Silakan coba lagi.' });
+                return;
+            }
 
             if (data.status === 'success') {
                 window.location.href = data.redirect;
-            } else {
-                setErrors(data.errors || {});
+                return;
             }
+
+            const mapped: Record<string, string> = {};
+            for (const [key, msgs] of Object.entries(data.errors ?? {})) {
+                mapped[key] = Array.isArray(msgs) ? msgs[0] : String(msgs);
+            }
+            setErrors(Object.keys(mapped).length ? mapped : { form: 'Terjadi kesalahan. Silakan coba lagi.' });
         } catch {
             setErrors({ form: 'Terjadi kesalahan. Silakan coba lagi.' });
         } finally {

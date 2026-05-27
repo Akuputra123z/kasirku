@@ -53,6 +53,7 @@ export function ImportDialog({
         setFile(null);
         setResult(null);
         setIsImporting(false);
+        if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input file HTML
     }, []);
 
     const handleOpenChange = (open: boolean) => {
@@ -62,26 +63,35 @@ export function ImportDialog({
         onOpenChange(open);
     };
 
+    // Fungsi helper untuk validasi ekstensi file
+    const isValidFile = (file: File | undefined) => {
+        const ext = file?.name?.split('.').pop()?.toLowerCase();
+        return file && ['xlsx', 'xls', 'csv'].includes(ext ?? '');
+    };
+
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
         const droppedFile = e.dataTransfer.files[0];
-        const ext = droppedFile?.name?.split('.').pop()?.toLowerCase();
-        if (droppedFile && ['xlsx', 'xls', 'csv'].includes(ext ?? '')) {
+        
+        if (isValidFile(droppedFile)) {
             setFile(droppedFile);
             setResult(null);
         } else {
-            toast.error(
-                'Hanya file Excel (.xlsx, .xls) atau CSV yang didukung.',
-            );
+            toast.error('Hanya file Excel (.xlsx, .xls) atau CSV yang didukung.');
         }
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
         if (selectedFile) {
-            setFile(selectedFile);
-            setResult(null);
+            if (isValidFile(selectedFile)) {
+                setFile(selectedFile);
+                setResult(null);
+            } else {
+                toast.error('Hanya file Excel (.xlsx, .xls) atau CSV yang didukung.');
+                if (fileInputRef.current) fileInputRef.current.value = '';
+            }
         }
     };
 
@@ -98,27 +108,29 @@ export function ImportDialog({
             forceFormData: true,
             preserveScroll: true,
             onSuccess: (page) => {
-                const importResult = page.props.flash?.import as
-                    | ImportResult
-                    | undefined;
+                // Mengambil flash object dari props Inertia
+                const importResult = page.props.flash?.import as ImportResult | undefined;
+                
                 if (importResult) {
                     setResult(importResult);
-                    if (importResult.errors.length === 0) {
-                        toast.success(
-                            `${importResult.imported} data berhasil diimport.`,
-                        );
+                    if (Number(importResult.errors?.length ?? 0) === 0) {
+                        toast.success(`${importResult.imported} data berhasil diimport.`);
                     } else {
                         toast.warning(
-                            `${importResult.imported} berhasil, ${importResult.errors.length} gagal.`,
+                            `${importResult.imported} berhasil, ${importResult.errors.length} gagal.`
                         );
                     }
+                } else {
+                    // Antisipasi jika backend sukses tapi tidak mengirimkan struktur flash['import']
+                    toast.success('File berhasil diproses.');
+                    handleOpenChange(false);
                 }
                 setIsImporting(false);
             },
-            onError: () => {
-                toast.error(
-                    'Gagal mengimport file. Periksa format Excel atau CSV.',
-                );
+            onError: (errors) => {
+                // Membaca error validasi Laravel jika ada (misal validasi 'file' => 'required|mimes:xlsx')
+                const errorMsg = Object.values(errors).join(', ') || 'Gagal mengimport file. Periksa format Excel atau CSV.';
+                toast.error(errorMsg);
                 setIsImporting(false);
             },
         });
@@ -127,10 +139,12 @@ export function ImportDialog({
     const downloadTemplate = () => {
         const link = document.createElement('a');
         link.href = templateUrl;
+        // Opsional: memaksa browser mendownload daripada membukanya di tab baru
+        link.setAttribute('download', templateUrl.split('/').pop() || 'template'); 
         link.click();
     };
 
-    const hasErrors = result && result.errors.length > 0;
+    const hasErrors = result && result.errors && result.errors.length > 0;
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -234,10 +248,11 @@ export function ImportDialog({
                                             variant="ghost"
                                             size="sm"
                                             onClick={(e) => {
-                                                e.stopPropagation();
+                                                e.stopPropagation(); // 🛠️ Mencegah file explorer terbuka kembali saat klik hapus
                                                 setFile(null);
+                                                if (fileInputRef.current) fileInputRef.current.value = '';
                                             }}
-                                            className="text-xs text-red-500 hover:text-red-600"
+                                            className="text-xs text-red-500 hover:text-red-600 relative z-10"
                                         >
                                             Hapus file
                                         </Button>

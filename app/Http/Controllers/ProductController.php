@@ -171,7 +171,7 @@ class ProductController extends Controller
         ]);
     }
 
-    public function import(Request $request)
+  public function import(Request $request)
     {
         Gate::authorize('manage-products');
 
@@ -191,9 +191,11 @@ class ProductController extends Controller
         $rows = $rows[0] ?? [];
 
         if (empty($rows)) {
-            return redirect()->back()->with('import', [
-                'imported' => 0,
-                'errors' => ['File Excel kosong atau tidak valid.'],
+            return redirect()->back()->with('flash', [
+                'import' => [
+                    'imported' => 0,
+                    'errors' => ['File Excel kosong atau tidak valid.'],
+                ]
             ]);
         }
 
@@ -223,26 +225,20 @@ class ProductController extends Controller
                 continue;
             }
 
+            // 🛠️ FIX 1: Otomatis bikin kategori baru kalau belum terdaftar
             $category = null;
             if (! blank($rowData['category'] ?? null)) {
-                $category = Category::where('name', $rowData['category'])->first();
-
-                if ($category === null) {
-                    $errors[] = "Baris {$rowNumber}: Kategori '{$rowData['category']}' tidak ditemukan.";
-
-                    continue;
-                }
+                $category = Category::firstOrCreate([
+                    'name' => $rowData['category']
+                ]);
             }
 
+            // 🛠️ FIX 2: Otomatis bikin brand baru juga kalau belum terdaftar (opsional tapi aman)
             $brand = null;
             if (! blank($rowData['brand'] ?? null)) {
-                $brand = Brand::where('name', $rowData['brand'])->first();
-
-                if ($brand === null) {
-                    $errors[] = "Baris {$rowNumber}: Brand '{$rowData['brand']}' tidak ditemukan.";
-
-                    continue;
-                }
+                $brand = Brand::firstOrCreate([
+                    'name' => $rowData['brand']
+                ]);
             }
 
             $status = ! blank($rowData['status'] ?? null) ? strtolower($rowData['status']) : 'active';
@@ -266,7 +262,13 @@ class ProductController extends Controller
             $imported++;
         }
 
-        return redirect()->back()->with('import', compact('imported', 'errors'));
+        // 🛠️ FIX 3: Dibungkus ke dalam array 'flash' -> 'import' agar dibaca oleh React (Inertia)
+        return redirect()->back()->with('flash', [
+            'import' => [
+                'imported' => $imported,
+                'errors' => $errors,
+            ]
+        ]);
     }
 
     public function downloadTemplate(): BinaryFileResponse

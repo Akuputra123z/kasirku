@@ -14,9 +14,7 @@ test('registration screen can be rendered', function () {
 });
 
 test('store registration creates tenant and returns redirect', function () {
-    $response = $this->post(route('stores.register'), [
-        'store_name' => 'Toko Test',
-        'store_slug' => 'toko-test',
+    $response = $this->postJson(route('stores.register'), [
         'name' => 'Test User',
         'email' => 'test@example.com',
         'password' => 'password',
@@ -31,26 +29,24 @@ test('store registration creates tenant and returns redirect', function () {
     ]);
 
     expect($response->json('status'))->toBe('success');
-    expect(Tenant::where('slug', 'toko-test')->exists())->toBeTrue();
+    expect(Tenant::where('name', 'Toko Test User')->exists())->toBeTrue();
 });
 
-test('store registration rejects duplicate slug', function () {
-    Tenant::create(['name' => 'Existing', 'slug' => 'existing']);
+test('store registration rejects duplicate email', function () {
+    \App\Models\User::factory()->create(['email' => 'test@example.com']);
 
-    $response = $this->post(route('stores.register'), [
-        'store_name' => 'Toko Test',
-        'store_slug' => 'existing',
+    $response = $this->postJson(route('stores.register'), [
         'name' => 'Test User',
         'email' => 'test@example.com',
         'password' => 'password',
         'password_confirmation' => 'password',
     ]);
 
-    expect($response->status())->toBe(302);
+    $response->assertStatus(422);
 });
 
 test('store registration validates required fields', function () {
-    $response = $this->post(route('stores.register'), []);
+    $response = $this->postJson(route('stores.register'), []);
 
-    expect($response->status())->toBe(302);
+    $response->assertStatus(422);
 });

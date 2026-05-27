@@ -117,7 +117,7 @@ export default function Reports({
     shiftReports,
     shiftSummary,
 }: Props) {
-    const auth = (usePage().props.auth as { permissions?: string[] } | undefined);
+    const auth = usePage().props.auth as { permissions?: string[] } | undefined;
     const [startDate, setStartDate] = useState(filters.start_date);
     const [endDate, setEndDate] = useState(filters.end_date);
     const printRef = useRef<HTMLDivElement>(null);
@@ -985,7 +985,9 @@ export default function Reports({
                                         <td className="py-1 font-bold">
                                             {t.transaction_code}
                                         </td>
-                                        <td className="py-1">{t.user?.name ?? '-'}</td>
+                                        <td className="py-1">
+                                            {t.user?.name ?? '-'}
+                                        </td>
                                         <td className="py-1">
                                             {fmtDate(t.created_at)}
                                         </td>

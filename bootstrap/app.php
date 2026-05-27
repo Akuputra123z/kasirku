@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\EnsureCentralContext;
+use App\Http\Middleware\EnsureTenantActive;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\IdentifyTenant;
@@ -33,6 +34,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => RoleMiddleware::class,
             'tenant.from-user' => SetTenantFromUser::class,
             'central.context' => EnsureCentralContext::class,
+            'tenant.active' => EnsureTenantActive::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

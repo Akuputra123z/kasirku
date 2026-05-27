@@ -25,7 +25,13 @@ class HandleInertiaRequests extends Middleware
         return [
             'errors' => fn () => $this->resolveValidationErrors($request),
             'flash' => $sessionAvailable
-                ? fn () => ['message' => $request->session()->get('message')]
+                ? fn () => [
+                    'success' => $request->session()->get('success'),
+                    'message' => $request->session()->get('message'),
+                    'error' => $request->session()->get('error'),
+                    'transaction' => $request->session()->get('transaction'),
+                    'suspended_tenant' => $request->session()->get('suspended_tenant'),
+                ]
                 : fn () => [],
             'name' => config('app.name'),
             'auth' => [
@@ -42,6 +48,9 @@ class HandleInertiaRequests extends Middleware
                 'logo' => $currentTenant->logo ?? null,
                 'logo_url' => $currentTenant->logo ? Storage::disk('public')->url($currentTenant->logo) : null,
                 'color_theme' => $currentTenant->color_theme ?? 'default',
+                'points_per_currency' => (int) ($currentTenant->settings['points_per_currency'] ?? 10000),
+                'point_value' => (int) ($currentTenant->settings['point_value'] ?? 100),
+                'min_redeem_points' => (int) ($currentTenant->settings['min_redeem_points'] ?? 100),
             ] : null,
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'centralAdmin' => $sessionAvailable && $request->session()->get('central_admin_id') !== null,

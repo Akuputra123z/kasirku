@@ -9,11 +9,21 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class Customer extends Model
 {
     /** @use HasFactory<CustomerFactory> */
-    use HasFactory, HasTenant, SoftDeletes;
+    use HasFactory, HasTenant, LogsActivity, SoftDeletes;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['name', 'email', 'phone', 'loyalty_points'])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
 
     protected $fillable = [
         'tenant_id',

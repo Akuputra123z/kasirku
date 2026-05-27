@@ -1,5 +1,5 @@
+'use client';
 import { Head, router, usePage } from '@inertiajs/react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
     CheckCircle2,
     XCircle,
@@ -7,8 +7,11 @@ import {
     Pencil,
     Trash2,
     Shield,
+    Search,
+    X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +31,15 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import rolesRoute from '@/routes/roles';
 
 interface Role {
     id: number;
@@ -42,7 +54,7 @@ interface PageProps extends Record<string, unknown> {
 }
 
 const permissionLabels: Record<string, string> = {
-    'view-dashboard': 'Dashboard',
+    'view-dashboard': 'Dasbor',
     'manage-products': 'Kelola Produk',
     'manage-categories': 'Kelola Kategori',
     'manage-payment-methods': 'Kelola Pembayaran',
@@ -58,16 +70,16 @@ const permissionLabels: Record<string, string> = {
 };
 
 const permissionGroups: Record<string, string[]> = {
-    Dashboard: ['view-dashboard'],
-    'Master Data': [
+    Dasbor: ['view-dashboard'],
+    'Data Master': [
         'manage-products',
         'manage-categories',
         'manage-payment-methods',
     ],
-    Transactions: ['manage-pos', 'view-history', 'manage-shifts'],
-    Reports: ['view-reports', 'export-reports'],
-    Tools: ['view-chat'],
-    Settings: ['manage-settings', 'manage-users'],
+    Transaksi: ['manage-pos', 'view-history', 'manage-shifts'],
+    Laporan: ['view-reports', 'export-reports'],
+    Alat: ['view-chat'],
+    Pengaturan: ['manage-settings', 'manage-users'],
     Promo: ['manage-vouchers'],
 };
 
@@ -78,7 +90,7 @@ const roleLabels: Record<string, string> = {
 };
 
 export default function RolesIndex() {
-    const { roles, permissions, flash } = usePage<PageProps>().props;
+    const { roles, permissions } = usePage<PageProps>().props;
 
     const [showForm, setShowForm] = useState(false);
     const [editing, setEditing] = useState<Role | null>(null);
@@ -88,6 +100,36 @@ export default function RolesIndex() {
         [],
     );
     const [saving, setSaving] = useState(false);
+
+    const [searchInput, setSearchInput] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const debouncedSearch = useCallback((value: string) => {
+        setSearchInput(value);
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = setTimeout(() => {
+            setSearchQuery(value);
+        }, 300);
+    }, []);
+
+    useEffect(
+        () => () => {
+            if (searchTimeoutRef.current)
+                clearTimeout(searchTimeoutRef.current);
+        },
+        [],
+    );
+
+    const filteredRoles = useMemo(() => {
+        if (!searchQuery) return roles;
+        const q = searchQuery.toLowerCase();
+        return roles.filter((role) => {
+            const label = roleLabels[role.name] ?? role.name;
+            return label.toLowerCase().includes(q);
+        });
+    }, [roles, searchQuery]);
 
     const openCreate = () => {
         setEditing(null);
@@ -120,10 +162,16 @@ export default function RolesIndex() {
 
         if (editing) {
             router.patch(
-                `/roles/${editing.id}`,
+                rolesRoute.update(editing.id).url,
                 { name: formName, permissions: selectedPermissions },
                 {
                     preserveScroll: true,
+                    onSuccess: () => {
+                        toast.success('Role berhasil diperbarui');
+                    },
+                    onError: () => {
+                        toast.error('Gagal memperbarui role');
+                    },
                     onFinish: () => {
                         setSaving(false);
                         setShowForm(false);
@@ -133,10 +181,16 @@ export default function RolesIndex() {
             );
         } else {
             router.post(
-                '/roles',
+                rolesRoute.store().url,
                 { name: formName, permissions: selectedPermissions },
                 {
                     preserveScroll: true,
+                    onSuccess: () => {
+                        toast.success('Role berhasil dibuat');
+                    },
+                    onError: () => {
+                        toast.error('Gagal membuat role');
+                    },
                     onFinish: () => {
                         setSaving(false);
                         setShowForm(false);
@@ -148,21 +202,27 @@ export default function RolesIndex() {
 
     const confirmDelete = () => {
         if (!deleteId) return;
-        router.delete(`/roles/${deleteId}`, {
+        router.delete(rolesRoute.destroy(deleteId).url, {
             preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Role berhasil dihapus');
+            },
+            onError: () => {
+                toast.error('Gagal menghapus role');
+            },
             onFinish: () => setDeleteId(null),
         });
     };
 
     return (
         <>
-            <Head title="Roles & Permissions" />
+            <Head title="Role & Hak Akses" />
             <div className="min-h-screen space-y-6 bg-neutral-50 p-4 md:p-8 dark:bg-neutral-950">
                 {/* Header */}
                 <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                            Roles & Permissions
+                            Role & Hak Akses
                         </h1>
                         <p className="mt-0.5 text-[13px] text-muted-foreground">
                             Kelola role dan hak akses pengguna toko.
@@ -176,35 +236,24 @@ export default function RolesIndex() {
                     </Button>
                 </div>
 
-                {/* Flash */}
-                <AnimatePresence>
-                    {flash?.success && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50"
+                {/* Search */}
+                <div className="relative w-full md:w-72">
+                    <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        placeholder="Cari role..."
+                        value={searchInput}
+                        onChange={(e) => debouncedSearch(e.target.value)}
+                        className="h-9 pr-8 pl-9 text-[13px]"
+                    />
+                    {searchInput && (
+                        <button
+                            onClick={() => debouncedSearch('')}
+                            className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         >
-                            <CheckCircle2 className="size-5 shrink-0" />
-                            <span className="text-sm font-medium">
-                                {flash.success}
-                            </span>
-                        </motion.div>
+                            <X className="size-3.5" />
+                        </button>
                     )}
-                    {flash?.error && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-800 dark:bg-red-950/50"
-                        >
-                            <XCircle className="size-5 shrink-0" />
-                            <span className="text-sm font-medium">
-                                {flash.error}
-                            </span>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                </div>
 
                 {/* Roles Table */}
                 <Card className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-none dark:border-neutral-800 dark:bg-neutral-950">
@@ -214,79 +263,108 @@ export default function RolesIndex() {
                             Daftar Role
                         </CardTitle>
                         <CardDescription>
-                            {roles.length} role terdaftar
+                            {filteredRoles.length} role terdaftar
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="p-0">
-                        <table className="w-full text-[13px]">
-                            <thead>
-                                <tr className="border-b border-neutral-100 dark:border-neutral-900">
-                                    <th className="px-4 py-3 text-left text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Role
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Permissions
-                                    </th>
-                                    <th className="w-28 px-4 py-3 text-right text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Aksi
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {roles.map((role) => (
-                                    <tr
-                                        key={role.id}
-                                        className="border-b border-neutral-100 transition-colors hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/50"
-                                    >
-                                        <td className="px-4 py-3 font-semibold capitalize">
-                                            {roleLabels[role.name] ?? role.name}
-                                        </td>
-                                        <td className="flex flex-wrap gap-1 px-4 py-3">
-                                            {role.permissions.length > 0 ? (
-                                                role.permissions.map((p) => (
-                                                    <Badge
-                                                        key={p}
-                                                        variant="secondary"
-                                                        className="rounded-md text-[11px]"
-                                                    >
-                                                        {permissionLabels[p] ??
-                                                            p}
-                                                    </Badge>
-                                                ))
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground">
-                                                    Tidak ada permissions
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <div className="flex items-center justify-end gap-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="size-8"
-                                                    onClick={() =>
-                                                        openEdit(role)
-                                                    }
-                                                >
-                                                    <Pencil className="size-3.5" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="size-8 text-red-500 hover:text-red-700"
-                                                    onClick={() =>
-                                                        setDeleteId(role.id)
-                                                    }
-                                                >
-                                                    <Trash2 className="size-3.5" />
-                                                </Button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="border-b border-neutral-100 hover:bg-transparent dark:border-neutral-900">
+                                        <TableHead className="text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Role
+                                        </TableHead>
+                                        <TableHead className="text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Hak Akses
+                                        </TableHead>
+                                        <TableHead className="w-28 text-right text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Aksi
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredRoles.length > 0 ? (
+                                        filteredRoles.map((role) => (
+                                            <TableRow
+                                                key={role.id}
+                                                className="border-b border-neutral-100 transition-colors hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/50"
+                                            >
+                                                <TableCell className="py-3 font-semibold capitalize">
+                                                    {roleLabels[role.name] ??
+                                                        role.name}
+                                                </TableCell>
+                                                <TableCell className="py-3">
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {role.permissions
+                                                            .length > 0 ? (
+                                                            role.permissions.map(
+                                                                (p) => (
+                                                                    <Badge
+                                                                        key={p}
+                                                                        variant="secondary"
+                                                                        className="rounded-md text-[11px]"
+                                                                    >
+                                                                        {permissionLabels[
+                                                                            p
+                                                                        ] ?? p}
+                                                                    </Badge>
+                                                                ),
+                                                            )
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">
+                                                                Tidak ada izin
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="py-3 text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-8"
+                                                            onClick={() =>
+                                                                openEdit(role)
+                                                            }
+                                                        >
+                                                            <Pencil className="size-3.5" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-8 text-red-500 hover:text-red-700"
+                                                            onClick={() =>
+                                                                setDeleteId(
+                                                                    role.id,
+                                                                )
+                                                            }
+                                                        >
+                                                            <Trash2 className="size-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell
+                                                colSpan={3}
+                                                className="h-52 text-center"
+                                            >
+                                                <div className="flex flex-col items-center justify-center space-y-3">
+                                                    <Shield className="size-10 text-neutral-300 dark:text-neutral-700" />
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {searchInput
+                                                            ? 'Tidak ada role yang cocok dengan pencarian.'
+                                                            : 'Belum ada role. Tambah role baru untuk memulai.'}
+                                                    </p>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
                     </CardContent>
                 </Card>
             </div>
@@ -301,7 +379,7 @@ export default function RolesIndex() {
                     }
                 }}
             >
-                <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
+                <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle>
                             {editing ? 'Edit Role' : 'Tambah Role'}
@@ -326,7 +404,7 @@ export default function RolesIndex() {
                         <div className="space-y-3">
                             <div className="flex items-center justify-between border-b pb-2">
                                 <Label className="text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
-                                    Permissions
+                                    Hak Akses
                                 </Label>
                                 <span className="text-xs text-muted-foreground">
                                     {selectedPermissions.length} /{' '}
@@ -423,7 +501,7 @@ export default function RolesIndex() {
                     if (!open) setDeleteId(null);
                 }}
             >
-                <DialogContent className="sm:max-w-sm">
+                <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-sm">
                     <DialogHeader>
                         <DialogTitle>Hapus Role</DialogTitle>
                     </DialogHeader>

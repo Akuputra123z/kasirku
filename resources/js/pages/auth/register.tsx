@@ -1,6 +1,6 @@
 import { Head } from '@inertiajs/react';
 import { useState } from 'react';
-import { Store, User, Mail, Lock, Check, X } from 'lucide-react';
+import { User, Mail, Lock, Check, X, Chrome } from 'lucide-react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import TextLink from '@/components/text-link';
@@ -11,12 +11,14 @@ import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
 import { login } from '@/routes';
 
-export default function Register() {
+type Props = {
+    googleUser?: { name: string; email: string; avatar?: string } | null;
+};
+
+export default function Register({ googleUser }: Props) {
     const [form, setForm] = useState({
-        store_name: '',
-        store_slug: '',
-        name: '',
-        email: '',
+        name: googleUser?.name ?? '',
+        email: googleUser?.email ?? '',
         password: '',
         password_confirmation: '',
     });
@@ -26,14 +28,6 @@ export default function Register() {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const slug = e.target.value
-            .toLowerCase()
-            .replace(/[^a-z0-9-]/g, '')
-            .replace(/-+/g, '-');
-        setForm((prev) => ({ ...prev, store_slug: slug }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -53,9 +47,12 @@ export default function Register() {
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': csrfToken,
-                    'Accept': 'application/json',
+                    Accept: 'application/json',
                 },
-                body: JSON.stringify(form),
+                body: JSON.stringify({
+                    ...form,
+                    google_registered: !!googleUser,
+                }),
             });
 
             let data;
@@ -75,7 +72,11 @@ export default function Register() {
             for (const [key, msgs] of Object.entries(data.errors ?? {})) {
                 mapped[key] = Array.isArray(msgs) ? msgs[0] : String(msgs);
             }
-            setErrors(Object.keys(mapped).length ? mapped : { form: 'Terjadi kesalahan. Silakan coba lagi.' });
+            setErrors(
+                Object.keys(mapped).length
+                    ? mapped
+                    : { form: 'Terjadi kesalahan. Silakan coba lagi.' },
+            );
         } catch {
             setErrors({ form: 'Terjadi kesalahan. Silakan coba lagi.' });
         } finally {
@@ -83,7 +84,6 @@ export default function Register() {
         }
     };
 
-    const domain = typeof window !== 'undefined' ? window.location.host : '';
     const passwordsMatch =
         form.password &&
         form.password_confirmation &&
@@ -92,71 +92,47 @@ export default function Register() {
 
     return (
         <>
-            <Head title="Buat Toko Baru" />
+            <Head title="Buat Akun Baru" />
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-                {/* Informasi Toko */}
-                <div className="grid gap-1">
-                    <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                        <Store className="size-4" />
-                        Informasi Toko
-                    </h3>
-                    <p className="mb-3 text-xs text-muted-foreground">
-                        Data toko yang akan digunakan untuk login pelanggan
-                    </p>
-                </div>
-
-                <div className="grid gap-4">
-                    <div className="grid gap-2">
-                        <Label htmlFor="store_name">Nama Toko</Label>
-                        <Input
-                            id="store_name"
-                            name="store_name"
-                            value={form.store_name}
-                            onChange={handleChange}
-                            required
-                            autoFocus
-                            placeholder="Contoh: Amerta Komputer"
-                        />
-                        <InputError message={errors.store_name} />
-                    </div>
-
-                    <div className="grid gap-2">
-                        <Label htmlFor="store_slug">Alamat Toko</Label>
-                        <div className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
-                            <span className="text-muted-foreground">
-                                https://
+                {/* Google Register */}
+                {!googleUser && (
+                    <>
+                        <a
+                            href="/auth/google/register-redirect"
+                            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#d7d4e7] py-2.5 text-[13px] font-semibold text-[#191c1d] transition-colors hover:bg-[#f3f4f5]"
+                        >
+                            <Chrome className="size-[18px]" />
+                            Daftar dengan Google
+                        </a>
+                        <div className="flex items-center gap-3">
+                            <div className="flex-grow border-t border-[#d7d4e7]" />
+                            <span className="text-[11px] font-medium text-[#464554]">
+                                Atau
                             </span>
-                            <Input
-                                id="store_slug"
-                                name="store_slug"
-                                value={form.store_slug}
-                                onChange={handleSlugChange}
-                                required
-                                placeholder="nama-toko"
-                                className="inline-flex h-7 min-h-0 w-36 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
-                            />
-                            <span className="break-all text-muted-foreground">
-                                .{domain}/
-                            </span>
+                            <div className="flex-grow border-t border-[#d7d4e7]" />
                         </div>
-                        <InputError message={errors.store_slug} />
+                    </>
+                )}
+
+                {/* Google user badge */}
+                {googleUser && (
+                    <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950">
+                        <Chrome className="size-5 shrink-0 text-green-600" />
+                        <div className="min-w-0 flex-1 text-sm">
+                            <p className="font-medium text-green-800 dark:text-green-200">
+                                Akun Google terverifikasi
+                            </p>
+                            <p className="truncate text-green-600 dark:text-green-400">
+                                {googleUser.email}
+                            </p>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 <Separator className="my-2" />
 
                 {/* Informasi Admin */}
-                <div className="grid gap-1">
-                    <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                        <User className="size-4" />
-                        Informasi Admin
-                    </h3>
-                    <p className="mb-3 text-xs text-muted-foreground">
-                        Data pemilik toko untuk login ke sistem
-                    </p>
-                </div>
-
                 <div className="grid gap-4">
                     <div className="grid gap-2">
                         <Label htmlFor="name">Nama Lengkap</Label>
@@ -166,6 +142,7 @@ export default function Register() {
                             value={form.name}
                             onChange={handleChange}
                             required
+                            autoFocus
                             autoComplete="name"
                             placeholder="Nama lengkap"
                         />
@@ -183,7 +160,18 @@ export default function Register() {
                             required
                             autoComplete="email"
                             placeholder="email@example.com"
+                            className={
+                                googleUser
+                                    ? 'bg-muted/50 text-muted-foreground'
+                                    : ''
+                            }
+                            readOnly={!!googleUser}
                         />
+                        {googleUser && (
+                            <p className="text-[11px] text-green-600">
+                                Email terverifikasi dari Google
+                            </p>
+                        )}
                         <InputError message={errors.email} />
                     </div>
                 </div>
@@ -266,8 +254,8 @@ export default function Register() {
                     className="mt-2 w-full gap-2"
                     disabled={processing}
                 >
-                    {processing ? <Spinner /> : <Store className="size-4" />}
-                    {processing ? 'Memproses...' : 'Buat Toko Baru'}
+                    {processing ? <Spinner /> : <User className="size-4" />}
+                    {processing ? 'Memproses...' : 'Daftar'}
                 </Button>
 
                 {errors.form && (
@@ -277,7 +265,7 @@ export default function Register() {
                 )}
 
                 <div className="text-center text-sm text-muted-foreground">
-                    Sudah punya toko? <TextLink href={login()}>Login</TextLink>
+                    Sudah punya akun? <TextLink href={login()}>Login</TextLink>
                 </div>
             </form>
         </>
@@ -285,6 +273,6 @@ export default function Register() {
 }
 
 Register.layout = {
-    title: 'Buat Toko Baru',
-    description: 'Daftarkan toko Anda untuk memulai',
+    title: 'Buat Akun Baru',
+    description: 'Daftar untuk memulai',
 };

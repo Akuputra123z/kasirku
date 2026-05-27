@@ -16,6 +16,7 @@ class RoleController extends Controller
     {
         $roles = Role::where('guard_name', 'web')
             ->where('name', '!=', 'super-admin')
+            ->where('tenant_id', tenant_id())
             ->get()
             ->map(fn ($role) => [
                 'id' => $role->id,
@@ -37,7 +38,7 @@ class RoleController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:roles,name',
+            'name' => ['required', 'string', 'max:255', Rule::unique('roles', 'name')->where('tenant_id', tenant_id())],
             'permissions' => 'required|array',
             'permissions.*' => 'string|exists:permissions,name',
         ]);
@@ -57,7 +58,7 @@ class RoleController extends Controller
     public function update(Request $request, Role $role): RedirectResponse
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255', Rule::unique('roles')->ignore($role->id)],
+            'name' => ['required', 'string', 'max:255', Rule::unique('roles', 'name')->where('tenant_id', tenant_id())->ignore($role->id)],
             'permissions' => 'required|array',
             'permissions.*' => 'string|exists:permissions,name',
         ]);

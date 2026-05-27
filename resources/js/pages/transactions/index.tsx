@@ -18,8 +18,7 @@ import {
     User,
     TicketPercent,
 } from 'lucide-react';
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { useReactToPrint } from 'react-to-print';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Receipt as ReceiptComponent } from '@/components/receipt';
 
@@ -32,11 +31,19 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import VisuallyHidden from '@/components/ui/visually-hidden';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
 import posRoute from '@/routes/pos';
+import printRoute from '@/routes/print';
 import vouchersRoute from '@/routes/vouchers';
 
 interface ProductVariant {
@@ -286,9 +293,6 @@ interface Customer {
     loyalty_points: number;
 }
 
-const POINT_VALUE = 100;
-const MIN_REDEEM_POINTS = 100;
-
 interface Props {
     products: Product[];
     paymentMethods: PaymentMethod[];
@@ -304,6 +308,10 @@ export default function POS({
 }: Props) {
     const page = usePage();
     const authUser = (page.props as any).auth?.user;
+    const flashTransaction = (page.props as any).flash?.transaction;
+    const tenant = (page.props as any).tenant;
+    const POINT_VALUE = tenant?.point_value ?? 100;
+    const MIN_REDEEM_POINTS = tenant?.min_redeem_points ?? 100;
     const [searchQuery, setSearchQuery] = useState('');
     const [activeCategory, setActiveCategory] = useState('All');
     const [cart, setCart] = useState<CartItem[]>([]);
@@ -340,10 +348,11 @@ export default function POS({
     } | null>(null);
     const [voucherError, setVoucherError] = useState('');
     const [isValidatingVoucher, setIsValidatingVoucher] = useState(false);
-    const [redeemPoints, setRedeemPoints] = useState(false);
+    const [redeemPointsInput, setRedeemPointsInput] = useState('');
     const [localCustomers, setLocalCustomers] = useState<Customer[]>([]);
     const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
-    const receiptRef = useRef<HTMLDivElement>(null);
+    const [isPrinting, setIsPrinting] = useState(false);
+    const [cartSheetOpen, setCartSheetOpen] = useState(false);
 
     const allCustomers = useMemo(
         () => [...customers, ...localCustomers],
@@ -410,15 +419,91 @@ export default function POS({
         }
     };
 
-    const receiptTitleRef = useRef('Struk');
+    useEffect(() => {
+        if (flashTransaction) {
+            const pm = paymentMethods.find((pm) => pm.id === paymentMethodId);
+            setLastTransaction({
+                id: flashTransaction.id,
+                transaction_code: flashTransaction.transaction_code,
+                subtotal_amount: flashTransaction.subtotal_amount,
+                tax_amount: flashTransaction.tax_amount,
+                discount_amount: flashTransaction.discount_amount,
+                total_amount: flashTransaction.total_amount,
+                paid_amount: flashTransaction.paid_amount,
+                change_amount: flashTransaction.change_amount,
+                order_type: flashTransaction.order_type,
+                user: authUser ? { name: authUser.name } : { name: 'Admin' },
+                payment_method: pm ? { name: pm.name } : null,
+                created_at: flashTransaction.created_at,
+                details: cart.map((i) => ({
+                    product_name: i.name,
+                    product: { name: i.name },
+                    price: i.price,
+                    quantity: i.quantity,
+                })),
+                customer: selectedCustomer ?? null,
+            });
+            setIsPaymentModalOpen(false);
+            setIsSuccessModalOpen(true);
+            setCart([]);
+            setPaidAmount('');
+            setManualTax('0');
+            setManualDiscount('0');
+            setSelectedCustomer(null);
+            setCustomerSearch('');
+            setAppliedVoucher(null);
+            setVoucherCode('');
+            setVoucherError('');
+            setRedeemPointsInput('');
+            toast.success('Transaksi berhasil!');
+        }
+    }, [flashTransaction]);
 
-    const handlePrint = useReactToPrint({
-        contentRef: receiptRef,
-        documentTitle: () => receiptTitleRef.current,
-    });
+    const printToPrinter = useCallback(
+        async (driver = 'usb') => {
+            const id = lastTransaction?.id;
+            if (!id) {
+                toast.error('Data transaksi tidak ditemukan');
+
+                return;
+            }
+            if (isPrinting) return;
+            setIsPrinting(true);
+            const token =
+                document
+                    .querySelector('meta[name="csrf-token"]')
+                    ?.getAttribute('content') || '';
+            try {
+                const url =
+                    printRoute.receipt(id).url +
+                    '?driver=' +
+                    encodeURIComponent(driver);
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': token,
+                        Accept: 'application/json',
+                    },
+                });
+                const data = await res.json();
+                if (data.success) {
+                    toast.success(data.message || 'Struk berhasil dicetak');
+                } else {
+                    toast.error(data.message);
+                }
+            } catch (err: any) {
+                toast.error(err?.message || 'Gagal mencetak struk');
+            } finally {
+                setIsPrinting(false);
+            }
+        },
+        [lastTransaction, isPrinting],
+    );
 
     const categories = useMemo(() => {
-        const cats = Array.from(new Set(products.map((p) => p.category.name)));
+        const cats = Array.from(
+            new Set(products.map((p) => p.category?.name ?? 'Uncategorized')),
+        );
 
         return ['All', ...cats];
     }, [products]);
@@ -430,9 +515,10 @@ export default function POS({
 
                 return (
                     (p.name.toLowerCase().includes(q) ||
-                        p.category.name.toLowerCase().includes(q)) &&
+                        (p.category?.name ?? '').toLowerCase().includes(q)) &&
                     (activeCategory === 'All' ||
-                        p.category.name === activeCategory)
+                        (p.category?.name ?? 'Uncategorized') ===
+                            activeCategory)
                 );
             }),
         [products, searchQuery, activeCategory],
@@ -449,7 +535,12 @@ export default function POS({
         ? Math.floor(selectedCustomer.loyalty_points / MIN_REDEEM_POINTS) *
           MIN_REDEEM_POINTS
         : 0;
-    const pointDiscount = redeemPoints ? maxRedeemPoints * POINT_VALUE : 0;
+    const redeemedPoints = Math.min(
+        Math.max(parseInt(redeemPointsInput) || 0, 0),
+        maxRedeemPoints,
+    );
+    const pointDiscount =
+        redeemedPoints >= MIN_REDEEM_POINTS ? redeemedPoints * POINT_VALUE : 0;
     const total = Math.max(
         0,
         subtotal + tax - discount - voucherDiscount - pointDiscount,
@@ -544,6 +635,10 @@ export default function POS({
         );
     };
 
+    const removeCartItem = (cartKey: string) => {
+        setCart((prev) => prev.filter((item) => item.cartKey !== cartKey));
+    };
+
     const applyVoucher = async () => {
         if (!voucherCode.trim()) {
             return;
@@ -622,53 +717,10 @@ export default function POS({
                 order_type: orderType,
                 customer_id: selectedCustomer?.id || null,
                 voucher_id: appliedVoucher?.id || null,
-                redeemed_points: redeemPoints ? maxRedeemPoints : 0,
+                redeemed_points:
+                    redeemedPoints >= MIN_REDEEM_POINTS ? redeemedPoints : 0,
             },
             {
-                onSuccess: () => {
-                    setLastTransaction({
-                        transaction_code:
-                            'TRX-' +
-                            Math.random()
-                                .toString(36)
-                                .substr(2, 9)
-                                .toUpperCase(),
-                        subtotal_amount: subtotal,
-                        tax_amount: tax,
-                        discount_amount: discount,
-                        total_amount: total,
-                        paid_amount: paid,
-                        change_amount: paid - total,
-                        user: authUser ? { name: authUser.name } : { name: 'Admin' },
-                        payment_method: paymentMethods.find(
-                            (pm) => pm.id === paymentMethodId,
-                        )
-                            ? { name: paymentMethods.find((pm) => pm.id === paymentMethodId)!.name }
-                            : null,
-                        order_type: orderType,
-                        details: cart.map((i) => ({
-                            product_name: i.name,
-                            product: { name: i.name },
-                            price: i.price,
-                            quantity: i.quantity,
-                        })),
-                        created_at: new Date().toISOString(),
-                        customer: selectedCustomer ?? null,
-                    });
-                    setIsPaymentModalOpen(false);
-                    setIsSuccessModalOpen(true);
-                    setCart([]);
-                    setPaidAmount('');
-                    setManualTax('0');
-                    setManualDiscount('0');
-                    setSelectedCustomer(null);
-                    setCustomerSearch('');
-                    setAppliedVoucher(null);
-                    setVoucherCode('');
-                    setVoucherError('');
-                    setRedeemPoints(false);
-                    toast.success('Transaksi berhasil!');
-                },
                 onError: (err) => toast.error(Object.values(err)[0] as string),
                 onFinish: () => setIsProcessing(false),
             },
@@ -682,105 +734,359 @@ export default function POS({
             <Head title="Point of Sale" />
 
             <div
-                className="flex overflow-hidden bg-muted"
+                className="flex flex-col overflow-hidden bg-muted"
                 style={{
                     fontFamily: "'Plus Jakarta Sans', sans-serif",
-                    height: 'calc(100vh - 3.5rem)',
+                    height: 'calc(100dvh - 3.5rem)',
                 }}
             >
-                <div className="flex flex-1 flex-col overflow-hidden">
-                    <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-background px-5 py-2.5">
-                        {categories.map((cat) => (
-                            <button
-                                key={cat}
-                                onClick={() => setActiveCategory(cat)}
-                                className={`rounded-full border px-4 py-1.5 text-[12px] font-semibold whitespace-nowrap transition-all ${
-                                    activeCategory === cat
-                                        ? 'border-primary bg-primary text-primary-foreground shadow-sm'
-                                        : 'border-border bg-card text-muted-foreground hover:border-primary/50'
-                                }`}
-                            >
-                                {cat}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto px-5 py-4">
-                        <div className="mb-4 flex items-center justify-between">
-                            <h2 className="text-[14px] font-bold text-foreground">
-                                {activeCategory === 'All'
-                                    ? 'All Menu'
-                                    : `${activeCategory} Menu`}
-                            </h2>
-                            <span className="text-[11px] font-medium text-muted-foreground">
-                                {filteredProducts.length} menu result
-                            </span>
+                <div className="flex flex-1 overflow-hidden">
+                    <div className="flex flex-1 flex-col overflow-hidden">
+                        <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-border bg-background px-3 py-2.5 md:px-5">
+                            {categories.map((cat) => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setActiveCategory(cat)}
+                                    className={`rounded-full border px-4 py-1.5 text-[12px] font-semibold whitespace-nowrap transition-all ${
+                                        activeCategory === cat
+                                            ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                                            : 'border-border bg-card text-muted-foreground hover:border-primary/50'
+                                    }`}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
                         </div>
 
-                        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 2xl:grid-cols-3">
-                            <AnimatePresence mode="popLayout">
-                                {filteredProducts.map((product) => (
-                                    <motion.div
-                                        key={product.id}
-                                        layout
-                                        initial={{ opacity: 0, y: 6 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, scale: 0.96 }}
-                                        transition={{ duration: 0.14 }}
-                                    >
-                                        <ProductCard
-                                            product={product}
-                                            isOpen={
-                                                expandedProductId === product.id
-                                            }
-                                            productOptions={productOptions}
-                                            setProductOptions={
-                                                setProductOptions
-                                            }
-                                            onCardClick={() =>
-                                                handleProductClick(product)
-                                            }
-                                            onAddToCart={(qty) =>
-                                                addToCart(product, qty)
-                                            }
-                                            fmt={fmt}
-                                        />
-                                    </motion.div>
-                                ))}
-                            </AnimatePresence>
+                        <div className="flex-1 overflow-y-auto px-3 py-4 md:px-5">
+                            <div className="relative mb-3">
+                                <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => {
+                                        setSearchQuery(e.target.value);
+                                        setExpandedProductId(null);
+                                    }}
+                                    placeholder="Cari produk atau kategori..."
+                                    className="h-10 w-full rounded-xl border border-border bg-background pr-4 pl-9 text-[16px] transition-all outline-none placeholder:text-muted-foreground/60 focus:border-primary focus:ring-1 focus:ring-primary md:text-[13px]"
+                                    autoComplete="off"
+                                />
+                            </div>
 
-                            {filteredProducts.length === 0 && (
-                                <div className="col-span-1 flex flex-col items-center justify-center py-20 opacity-30 lg:col-span-2 2xl:col-span-3">
-                                    <Package className="mb-2 size-10 text-muted-foreground" />
-                                    <p className="text-[13px] font-bold text-muted-foreground">
-                                        Produk tidak ditemukan
-                                    </p>
-                                </div>
+                            <div className="mb-4 flex items-center justify-between">
+                                <h2 className="text-[14px] font-bold text-foreground">
+                                    {activeCategory === 'All'
+                                        ? 'All Menu'
+                                        : `${activeCategory} Menu`}
+                                </h2>
+                                <span className="text-[11px] font-medium text-muted-foreground">
+                                    {filteredProducts.length} menu result
+                                </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 2xl:grid-cols-3">
+                                <AnimatePresence mode="popLayout">
+                                    {filteredProducts.map((product) => (
+                                        <motion.div
+                                            key={product.id}
+                                            layout
+                                            initial={{ opacity: 0, y: 6 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.96 }}
+                                            transition={{ duration: 0.14 }}
+                                        >
+                                            <ProductCard
+                                                product={product}
+                                                isOpen={
+                                                    expandedProductId ===
+                                                    product.id
+                                                }
+                                                productOptions={productOptions}
+                                                setProductOptions={
+                                                    setProductOptions
+                                                }
+                                                onCardClick={() =>
+                                                    handleProductClick(product)
+                                                }
+                                                onAddToCart={(qty) =>
+                                                    addToCart(product, qty)
+                                                }
+                                                fmt={fmt}
+                                            />
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
+
+                                {filteredProducts.length === 0 && (
+                                    <div className="col-span-1 flex flex-col items-center justify-center py-20 opacity-30 lg:col-span-2 2xl:col-span-3">
+                                        <Package className="mb-2 size-10 text-muted-foreground" />
+                                        <p className="text-[13px] font-bold text-muted-foreground">
+                                            Produk tidak ditemukan
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="hidden h-full w-[270px] shrink-0 flex-col border-l border-border bg-card md:flex">
+                        <div className="flex shrink-0 items-center justify-between px-4 pt-3 pb-1">
+                            <h2 className="text-[14px] font-bold text-foreground">
+                                Bills
+                            </h2>
+                            {cart.length > 0 && (
+                                <button
+                                    onClick={() => setCart([])}
+                                    className="text-[11px] font-semibold text-red-400 transition-colors hover:text-red-600"
+                                >
+                                    Clear all
+                                </button>
                             )}
+                        </div>
+
+                        <ScrollArea className="flex-1 px-4">
+                            <div className="space-y-3 py-2">
+                                <AnimatePresence initial={false}>
+                                    {cart.length > 0 ? (
+                                        cart.map((item) => (
+                                            <motion.div
+                                                key={item.cartKey}
+                                                layout
+                                                initial={{ opacity: 0, x: 12 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                exit={{
+                                                    opacity: 0,
+                                                    x: 12,
+                                                    transition: {
+                                                        duration: 0.1,
+                                                    },
+                                                }}
+                                                className="flex items-start gap-2.5"
+                                            >
+                                                <div className="size-11 shrink-0 overflow-hidden rounded-lg bg-muted">
+                                                    {item.image ? (
+                                                        <img
+                                                            src={`/storage/${item.image}`}
+                                                            className="size-full object-cover"
+                                                            alt=""
+                                                        />
+                                                    ) : (
+                                                        <div className="flex size-full items-center justify-center text-muted-foreground">
+                                                            <Package className="size-4" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-start justify-between gap-1">
+                                                        <p className="truncate text-[12px] leading-tight font-bold text-foreground">
+                                                            {item.name}
+                                                        </p>
+                                                        <p className="shrink-0 text-[12px] font-bold whitespace-nowrap text-foreground">
+                                                            {fmt(
+                                                                item.price *
+                                                                    item.quantity,
+                                                            )}
+                                                        </p>
+                                                    </div>
+                                                    {item.selectedVariant && (
+                                                        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                                                            Variant:{' '}
+                                                            {
+                                                                item
+                                                                    .selectedVariant
+                                                                    .name
+                                                            }
+                                                        </p>
+                                                    )}
+                                                    <div className="mt-1.5 flex items-center gap-1.5">
+                                                        <div className="flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5">
+                                                            <button
+                                                                onClick={() =>
+                                                                    updateQty(
+                                                                        item.cartKey,
+                                                                        -1,
+                                                                    )
+                                                                }
+                                                                className="flex size-4 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                                                            >
+                                                                <Minus className="size-2.5" />
+                                                            </button>
+                                                            <span className="w-4 text-center text-[11px] font-bold">
+                                                                {item.quantity}
+                                                            </span>
+                                                            <button
+                                                                onClick={() =>
+                                                                    updateQty(
+                                                                        item.cartKey,
+                                                                        1,
+                                                                    )
+                                                                }
+                                                                className="flex size-4 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                                                            >
+                                                                <Plus className="size-2.5" />
+                                                            </button>
+                                                        </div>
+                                                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                                            Notes
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        ))
+                                    ) : (
+                                        <div className="flex h-40 flex-col items-center justify-center opacity-30">
+                                            <ShoppingCart className="mb-2 size-8 text-muted-foreground" />
+                                            <p className="text-[12px] font-bold text-muted-foreground">
+                                                Keranjang kosong
+                                            </p>
+                                        </div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        </ScrollArea>
+
+                        {/* Summary */}
+                        <div className="shrink-0 space-y-1.5 border-t border-dashed border-border px-4 py-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[12px] text-muted-foreground">
+                                    Sub Total
+                                </span>
+                                <span className="text-[12px] font-semibold text-foreground">
+                                    {fmt(subtotal)}
+                                </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-[12px] text-muted-foreground">
+                                    Tax
+                                </span>
+                                <CurrencyInput
+                                    value={manualTax}
+                                    onChange={setManualTax}
+                                    prefix=""
+                                    className="h-7 w-20 rounded border-none bg-transparent px-1 py-0.5 text-right text-[12px] font-semibold text-foreground focus:bg-muted focus:outline-none"
+                                />
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-[12px] text-muted-foreground">
+                                    Discount
+                                </span>
+                                <div className="flex items-center gap-0.5">
+                                    <span className="text-[12px] text-muted-foreground">
+                                        -
+                                    </span>
+                                    <CurrencyInput
+                                        value={manualDiscount}
+                                        onChange={setManualDiscount}
+                                        prefix=""
+                                        className="h-7 w-20 rounded border-none bg-transparent px-1 py-0.5 text-right text-[12px] font-semibold text-foreground focus:bg-muted focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex items-center justify-between border-t border-dashed border-border pt-2">
+                                <span className="text-[14px] font-bold text-foreground">
+                                    Total
+                                </span>
+                                <span className="text-[14px] font-black text-foreground">
+                                    {fmt(total)}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Promo */}
+                        <div className="mx-4 mb-3 flex shrink-0 cursor-pointer items-center gap-2 rounded-xl bg-muted p-2.5 transition-colors hover:bg-accent">
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-card shadow-sm">
+                                <Ticket className="size-4 text-primary" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-[10px] leading-tight font-black text-foreground"></p>
+                                <p className="truncate text-[9px] text-muted-foreground">
+                                    {promotionText}
+                                </p>
+                            </div>
+                            <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
+                        </div>
+
+                        {/* Checkout */}
+                        <div className="shrink-0 px-4 pb-4">
+                            <button
+                                disabled={cart.length === 0}
+                                onClick={() => {
+                                    setPaidAmount(total.toString());
+                                    setIsPaymentModalOpen(true);
+                                }}
+                                className="h-11 w-full rounded-xl bg-primary text-[13px] font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                Checkout
+                            </button>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex h-full w-[270px] shrink-0 flex-col border-l border-border bg-card">
-                    <div className="flex shrink-0 items-center justify-between px-4 pt-3 pb-1">
-                        <h2 className="text-[14px] font-bold text-foreground">
-                            Bills
-                        </h2>
+                {/* ── MOBILE BOTTOM BAR ── */}
+                <div className="flex shrink-0 items-center gap-3 border-t border-border bg-card px-4 py-3 shadow-lg md:hidden">
+                    <button
+                        onClick={() => setCartSheetOpen(true)}
+                        className="relative flex items-center gap-2"
+                    >
+                        <ShoppingCart className="size-5 text-foreground" />
                         {cart.length > 0 && (
-                            <button
-                                onClick={() => setCart([])}
-                                className="text-[11px] font-semibold text-red-400 transition-colors hover:text-red-600"
-                            >
-                                Clear all
-                            </button>
+                            <span className="flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+                                {cart.length}
+                            </span>
                         )}
+                    </button>
+
+                    <div className="flex-1 text-right">
+                        <p className="text-[11px] text-muted-foreground">
+                            Total
+                        </p>
+                        <p className="text-[15px] font-black text-foreground">
+                            {fmt(total)}
+                        </p>
                     </div>
 
+                    <button
+                        disabled={cart.length === 0}
+                        onClick={() => {
+                            setPaidAmount(total.toString());
+                            setIsPaymentModalOpen(true);
+                        }}
+                        className="h-11 flex-1 rounded-xl bg-primary text-[13px] font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                        Checkout
+                    </button>
+                </div>
+            </div>
+
+            {/* ── MOBILE CART SHEET ── */}
+            <Sheet open={cartSheetOpen} onOpenChange={setCartSheetOpen}>
+                <SheetContent
+                    side="bottom"
+                    className="flex h-full max-h-full flex-col rounded-t-none p-0"
+                    showCloseButton={false}
+                >
+                    <SheetHeader className="shrink-0 border-b border-border px-4 py-3">
+                        <div className="flex items-center justify-between">
+                            <SheetTitle className="text-[14px] font-bold">
+                                Bills
+                            </SheetTitle>
+                            {cart.length > 0 && (
+                                <button
+                                    onClick={() => setCart([])}
+                                    className="text-[11px] font-semibold text-red-400 transition-colors hover:text-red-600"
+                                >
+                                    Clear all
+                                </button>
+                            )}
+                        </div>
+                    </SheetHeader>
+
                     <ScrollArea className="flex-1 px-4">
-                        <div className="space-y-3 py-2">
-                            <AnimatePresence initial={false}>
-                                {cart.length > 0 ? (
-                                    cart.map((item) => (
+                        <div className="space-y-3 py-3">
+                            {cart.length > 0 ? (
+                                <AnimatePresence initial={false}>
+                                    {cart.map((item) => (
                                         <motion.div
                                             key={item.cartKey}
                                             layout
@@ -791,8 +1097,16 @@ export default function POS({
                                                 x: 12,
                                                 transition: { duration: 0.1 },
                                             }}
-                                            className="flex items-start gap-2.5"
+                                            className="group relative flex items-start gap-2.5 rounded-xl bg-card"
                                         >
+                                            <button
+                                                onClick={() =>
+                                                    removeCartItem(item.cartKey)
+                                                }
+                                                className="absolute top-0 right-0 z-10 flex size-7 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-red-500 text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+                                            >
+                                                <X />
+                                            </button>
                                             <div className="size-11 shrink-0 overflow-hidden rounded-lg bg-muted">
                                                 {item.image ? (
                                                     <img
@@ -828,7 +1142,7 @@ export default function POS({
                                                     </p>
                                                 )}
                                                 <div className="mt-1.5 flex items-center gap-1.5">
-                                                    <div className="flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5">
+                                                    <div className="flex items-center gap-0.5 rounded-md border border-border px-1 py-0.5">
                                                         <button
                                                             onClick={() =>
                                                                 updateQty(
@@ -836,11 +1150,11 @@ export default function POS({
                                                                     -1,
                                                                 )
                                                             }
-                                                            className="flex size-4 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                                                            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground active:bg-accent"
                                                         >
-                                                            <Minus className="size-2.5" />
+                                                            <Minus className="size-3" />
                                                         </button>
-                                                        <span className="w-4 text-center text-[11px] font-bold">
+                                                        <span className="w-6 text-center text-[12px] font-bold">
                                                             {item.quantity}
                                                         </span>
                                                         <button
@@ -850,31 +1164,27 @@ export default function POS({
                                                                     1,
                                                                 )
                                                             }
-                                                            className="flex size-4 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                                                            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground active:bg-accent"
                                                         >
-                                                            <Plus className="size-2.5" />
+                                                            <Plus className="size-3" />
                                                         </button>
                                                     </div>
-                                                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                                        Notes
-                                                    </span>
                                                 </div>
                                             </div>
                                         </motion.div>
-                                    ))
-                                ) : (
-                                    <div className="flex h-40 flex-col items-center justify-center opacity-30">
-                                        <ShoppingCart className="mb-2 size-8 text-muted-foreground" />
-                                        <p className="text-[12px] font-bold text-muted-foreground">
-                                            Keranjang kosong
-                                        </p>
-                                    </div>
-                                )}
-                            </AnimatePresence>
+                                    ))}
+                                </AnimatePresence>
+                            ) : (
+                                <div className="flex h-40 flex-col items-center justify-center opacity-30">
+                                    <ShoppingCart className="mb-2 size-8 text-muted-foreground" />
+                                    <p className="text-[12px] font-bold text-muted-foreground">
+                                        Keranjang kosong
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </ScrollArea>
 
-                    {/* Summary */}
                     <div className="shrink-0 space-y-1.5 border-t border-dashed border-border px-4 py-3">
                         <div className="flex items-center justify-between">
                             <span className="text-[12px] text-muted-foreground">
@@ -921,37 +1231,23 @@ export default function POS({
                         </div>
                     </div>
 
-                    {/* Promo */}
-                    <div className="mx-4 mb-3 flex shrink-0 cursor-pointer items-center gap-2 rounded-xl bg-muted p-2.5 transition-colors hover:bg-accent">
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-card shadow-sm">
-                            <Ticket className="size-4 text-primary" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <p className="text-[10px] leading-tight font-black text-foreground">
-                                Aromate 3rd Anniversary
-                            </p>
-                            <p className="truncate text-[9px] text-muted-foreground">
-                                {promotionText}
-                            </p>
-                        </div>
-                        <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
-                    </div>
-
-                    {/* Checkout */}
                     <div className="shrink-0 px-4 pb-4">
                         <button
                             disabled={cart.length === 0}
                             onClick={() => {
-                                setPaidAmount(total.toString());
-                                setIsPaymentModalOpen(true);
+                                setCartSheetOpen(false);
+                                setTimeout(() => {
+                                    setPaidAmount(total.toString());
+                                    setIsPaymentModalOpen(true);
+                                }, 200);
                             }}
                             className="h-11 w-full rounded-xl bg-primary text-[13px] font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
                         >
                             Checkout
                         </button>
                     </div>
-                </div>
-            </div>
+                </SheetContent>
+            </Sheet>
 
             {/* ── PAYMENT MODAL ── */}
             <Dialog
@@ -959,23 +1255,26 @@ export default function POS({
                 onOpenChange={setIsPaymentModalOpen}
             >
                 <DialogContent
-                    className="overflow-hidden rounded-[1.5rem] border-none bg-card p-0 shadow-2xl sm:max-w-[400px]"
+                    className="flex flex-col border-none bg-card p-0 shadow-2xl max-sm:top-0 max-sm:left-0 max-sm:h-full max-sm:max-h-dvh max-sm:w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none sm:max-h-[90vh] sm:max-w-[480px] sm:rounded-[1.5rem] lg:max-w-[520px]"
                     style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
-                    <form onSubmit={handlePayment}>
-                        <div className="space-y-4 p-6">
+                    <form
+                        onSubmit={handlePayment}
+                        className="flex h-full flex-col overflow-hidden"
+                    >
+                        <div className="flex-1 space-y-5 overflow-y-auto p-5 pb-0 sm:p-7 sm:pb-0">
                             <DialogHeader>
-                                <div className="mb-2 flex size-12 items-center justify-center rounded-xl bg-primary/10">
-                                    <Banknote className="size-6 text-primary" />
+                                <div className="mb-3 flex size-12 items-center justify-center rounded-xl bg-primary/10 sm:size-14">
+                                    <Banknote className="size-6 text-primary sm:size-7" />
                                 </div>
-                                <DialogTitle className="text-[17px] font-black">
-                                    Complete Payment
+                                <DialogTitle className="text-lg font-black sm:text-xl">
+                                    Pembayaran
                                 </DialogTitle>
-                                <DialogDescription className="text-[12px]">
+                                <DialogDescription className="text-[13px]">
                                     Konfirmasi pembayaran dari pelanggan.
                                 </DialogDescription>
                             </DialogHeader>
-                            <div className="space-y-1.5 rounded-xl border border-border bg-muted p-4">
+                            <div className="space-y-2 rounded-xl border border-border bg-muted p-4 sm:p-5">
                                 {[
                                     ['Subtotal', fmt(subtotal)],
                                     ['Tax', `+${fmt(tax)}`],
@@ -1036,9 +1335,15 @@ export default function POS({
                                     }
                                     className="h-11 w-full rounded-xl border border-border bg-background px-3 text-[14px] font-bold outline-none focus:border-primary focus:ring-primary"
                                 >
-                                    <option value="direct">Direct (Pembelian Langsung)</option>
-                                    <option value="service">Service (Perbaikan)</option>
-                                    <option value="pre_order">Pre-Order (Inden)</option>
+                                    <option value="direct">
+                                        Direct (Pembelian Langsung)
+                                    </option>
+                                    <option value="service">
+                                        Service (Perbaikan)
+                                    </option>
+                                    <option value="pre_order">
+                                        Pre-Order (Inden)
+                                    </option>
                                 </select>
                             </div>
                             <div className="space-y-1.5">
@@ -1136,40 +1441,40 @@ export default function POS({
                                                                     </button>
                                                                 ),
                                                             )
-                                                            ) : customerSearch.trim() ? (
-                                                             <button
-                                                                 type="button"
-                                                                 onClick={
-                                                                     handleCreateCustomer
-                                                                 }
-                                                                 disabled={
-                                                                     isCreatingCustomer
-                                                                 }
-                                                                 className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent"
-                                                             >
-                                                                 <div className="flex size-7 items-center justify-center rounded-full bg-primary/10">
-                                                                     <Plus className="size-3.5 text-primary" />
-                                                                 </div>
-                                                                 <div className="min-w-0">
-                                                                     <p className="text-[13px] font-semibold text-foreground">
-                                                                         {isCreatingCustomer
-                                                                             ? 'Membuat...'
-                                                                             : `Buat Pelanggan Baru "${customerSearch}"`}
-                                                                     </p>
-                                                                     <p className="text-[11px] text-muted-foreground">
-                                                                         Nama
-                                                                         pelanggan
-                                                                         belum
-                                                                         terdaftar
-                                                                     </p>
-                                                                 </div>
-                                                             </button>
-                                                         ) : (
-                                                             <p className="px-3 py-3 text-center text-[12px] text-muted-foreground">
-                                                                 Ketik nama
-                                                                 pelanggan
-                                                             </p>
-                                                         )}
+                                                        ) : customerSearch.trim() ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={
+                                                                    handleCreateCustomer
+                                                                }
+                                                                disabled={
+                                                                    isCreatingCustomer
+                                                                }
+                                                                className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent"
+                                                            >
+                                                                <div className="flex size-7 items-center justify-center rounded-full bg-primary/10">
+                                                                    <Plus className="size-3.5 text-primary" />
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <p className="text-[13px] font-semibold text-foreground">
+                                                                        {isCreatingCustomer
+                                                                            ? 'Membuat...'
+                                                                            : `Buat Pelanggan Baru "${customerSearch}"`}
+                                                                    </p>
+                                                                    <p className="text-[11px] text-muted-foreground">
+                                                                        Nama
+                                                                        pelanggan
+                                                                        belum
+                                                                        terdaftar
+                                                                    </p>
+                                                                </div>
+                                                            </button>
+                                                        ) : (
+                                                            <p className="px-3 py-3 text-center text-[12px] text-muted-foreground">
+                                                                Ketik nama
+                                                                pelanggan
+                                                            </p>
+                                                        )}
                                                     </div>
                                                 )}
                                         </div>
@@ -1249,25 +1554,24 @@ export default function POS({
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-3 rounded-xl border border-border bg-muted p-3">
-                                            <label className="flex flex-1 cursor-pointer items-center gap-2">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={redeemPoints}
+                                            <div className="flex flex-1 items-center gap-2">
+                                                <Input
+                                                    type="number"
+                                                    min={MIN_REDEEM_POINTS}
+                                                    max={maxRedeemPoints}
+                                                    value={redeemPointsInput}
                                                     onChange={(e) =>
-                                                        setRedeemPoints(
-                                                            e.target.checked,
+                                                        setRedeemPointsInput(
+                                                            e.target.value,
                                                         )
                                                     }
-                                                    className="size-4 rounded border-border text-primary focus:ring-primary"
+                                                    placeholder="Jumlah poin"
+                                                    className="h-9 flex-1 rounded-lg text-[13px] font-medium"
                                                 />
-                                                <span className="text-[13px] font-medium text-foreground">
-                                                    Tukar{' '}
-                                                    {maxRedeemPoints.toLocaleString()}{' '}
-                                                    poin
-                                                </span>
-                                            </label>
-                                            {redeemPoints && (
-                                                <span className="text-[12px] font-bold text-red-500">
+                                            </div>
+                                            {redeemedPoints >=
+                                                MIN_REDEEM_POINTS && (
+                                                <span className="shrink-0 text-[12px] font-bold text-red-500">
                                                     -{fmt(pointDiscount)}
                                                 </span>
                                             )}
@@ -1325,12 +1629,12 @@ export default function POS({
                                 </motion.div>
                             )}
                         </div>
-                        <div className="flex gap-3 px-6 pb-6">
+                        <div className="flex shrink-0 gap-3 px-5 pb-5 sm:px-7 sm:pb-7">
                             <Button
                                 type="button"
                                 variant="outline"
                                 onClick={() => setIsPaymentModalOpen(false)}
-                                className="h-10 flex-1 rounded-xl text-[12px] font-bold"
+                                className="h-12 flex-1 rounded-xl text-[13px] font-bold"
                             >
                                 Batal
                             </Button>
@@ -1341,7 +1645,7 @@ export default function POS({
                                     !paidAmount ||
                                     parseFloat(paidAmount) < total
                                 }
-                                className="h-10 flex-[1.5] rounded-xl bg-primary text-[12px] font-bold text-primary-foreground hover:bg-primary/90"
+                                className="h-12 flex-[2] rounded-xl bg-primary text-[13px] font-bold text-primary-foreground hover:bg-primary/90"
                             >
                                 {isProcessing
                                     ? 'Memproses...'
@@ -1358,53 +1662,59 @@ export default function POS({
                 onOpenChange={setIsSuccessModalOpen}
             >
                 <DialogContent
-                    className="rounded-[1.5rem] border-none bg-card p-7 text-center shadow-2xl sm:max-w-[340px]"
+                    className="border-none bg-card p-0 text-center shadow-2xl max-sm:top-0 max-sm:left-0 max-sm:h-full max-sm:max-h-dvh max-sm:w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none sm:max-w-[400px] sm:rounded-[1.5rem]"
                     style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}
                 >
-                    <div className="flex flex-col items-center space-y-4">
-                        <div className="flex size-14 items-center justify-center rounded-2xl bg-green-100">
-                            <CheckCircle2 className="size-8 text-green-600" />
+                    <div className="flex h-full flex-col items-center justify-center gap-5 p-8 sm:p-10">
+                        <div className="flex size-16 items-center justify-center rounded-2xl bg-green-100">
+                            <CheckCircle2 className="size-9 text-green-600" />
                         </div>
                         <div>
-                            <h3 className="text-[17px] font-black text-foreground">
+                            <VisuallyHidden>
+                                <DialogTitle>Transaksi Berhasil!</DialogTitle>
+                            </VisuallyHidden>
+                            <h3 className="text-xl font-black text-foreground">
                                 Transaksi Berhasil!
                             </h3>
-                            <p className="mt-1 text-[12px] text-muted-foreground">
+                            <p className="mt-1.5 text-[13px] text-muted-foreground">
                                 Stok diperbarui dan transaksi tercatat.
                             </p>
                         </div>
-                        <div className="grid w-full grid-cols-2 gap-3">
-                            <Button
-                                onClick={() => {
-                                    receiptTitleRef.current =
-                                        lastTransaction?.transaction_code ??
-                                        'Struk';
-                                    handlePrint();
-                                }}
-                                variant="outline"
-                                className="flex h-10 items-center gap-1.5 rounded-xl text-[12px] font-bold"
+                        <Button
+                            onClick={() => printToPrinter('bluetooth')}
+                            disabled={isPrinting}
+                            className="flex h-11 w-full items-center gap-2 rounded-xl bg-primary text-[13px] font-bold text-primary-foreground hover:bg-primary/90"
+                        >
+                            <svg
+                                className="size-4"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
                             >
-                                <Receipt className="size-3.5" /> Print Struk
-                            </Button>
-                            <Button
-                                onClick={() => setIsSuccessModalOpen(false)}
-                                className="h-10 rounded-xl bg-primary text-[12px] font-bold text-primary-foreground hover:bg-primary/90"
-                            >
-                                Selesai
-                            </Button>
-                        </div>
+                                <path d="M6 7l6 10 6-10" />
+                                <path d="M12 17V3" />
+                            </svg>{' '}
+                            {isPrinting ? 'Mencetak...' : 'Cetak Bluetooth'}
+                        </Button>
+                        <Button
+                            onClick={() => printToPrinter('usb')}
+                            disabled={isPrinting}
+                            variant="outline"
+                            className="flex h-11 w-full items-center gap-2 rounded-xl text-[13px] font-bold"
+                        >
+                            <Receipt className="size-4" />{' '}
+                            {isPrinting ? 'Mencetak...' : 'Cetak Printer (USB)'}
+                        </Button>
+                        <Button
+                            onClick={() => setIsSuccessModalOpen(false)}
+                            className="h-11 w-full rounded-xl bg-secondary text-[13px] font-bold text-secondary-foreground hover:bg-secondary/80"
+                        >
+                            Selesai
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
-
-            {lastTransaction && (
-                <div style={{ display: 'none' }}>
-                    <ReceiptComponent
-                        ref={receiptRef}
-                        transaction={lastTransaction}
-                    />
-                </div>
-            )}
         </>
     );
 }

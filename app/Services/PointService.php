@@ -4,24 +4,38 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Models\PointTransaction;
+use App\Models\Tenant;
 use App\Models\Transaction;
 
 class PointService
 {
-    const int POINTS_PER_CURRENCY = 10000;
+    public static function getConfig(): array
+    {
+        $tenant = tenant();
 
-    const int POINT_VALUE = 100;
+        if ($tenant instanceof Tenant) {
+            return $tenant->getPointConfig();
+        }
 
-    const int MIN_REDEEM_POINTS = 100;
+        return [
+            'points_per_currency' => 10000,
+            'point_value' => 100,
+            'min_redeem_points' => 100,
+        ];
+    }
 
     public static function calculateEarnedPoints(int $totalAmount): int
     {
-        return (int) floor($totalAmount / self::POINTS_PER_CURRENCY);
+        $config = self::getConfig();
+
+        return (int) floor($totalAmount / $config['points_per_currency']);
     }
 
     public static function calculateRedeemDiscount(int $points): int
     {
-        return $points * self::POINT_VALUE;
+        $config = self::getConfig();
+
+        return $points * $config['point_value'];
     }
 
     public static function earnPoints(Customer $customer, Transaction $transaction, int $totalAmount): void

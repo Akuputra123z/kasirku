@@ -185,6 +185,7 @@ class ReportController extends Controller
         $transactions = Transaction::with(['details.product', 'user'])
             ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
             ->latest()
+            ->limit(500)
             ->get();
 
         $pdf = Pdf::loadView('exports.report-pdf', compact(

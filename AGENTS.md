@@ -69,3 +69,15 @@
 - Buat test: `php artisan make:test --pest NamaTest`
 - Auth tests di `tests/Feature/Auth/`
 - Tidak ada database tenancy di test (SQLite :memory:) — test hanya central context
+
+## Printing (macOS + RPP02N Bluetooth)
+
+- **PRINT_DRIVER=file** (default sekarang) — receipt disimpan ke `storage/logs/receipts/{timestamp}.bin`
+- **"Cetak Printer"** button di POS → backend simpan file .bin, tidak kirim ke printer langsung
+- **Script helper:** `./send-receipt-to-printer.sh` — kirim latest .bin ke `/dev/cu.RPP02N` via Bluetooth
+- **"Print Struk"** (react-to-print) → browser native print dialog, hanya untuk printer yang terdaftar di System Settings
+- **"Cetak Bluetooth"** (Web Bluetooth) → BLE only, RPP02N (Classic SPP) tidak support
+
+**Jika mau ganti driver:**
+- `PRINT_DRIVER=bluetooth` + `PRINT_BLUETOOTH_DEVICE=/dev/cu.RPP02N` + `PRINT_BLUETOOTH_MAC=86:67:7A:9E:0E:1B` — kirim langsung via PHP (rawan gagal di macOS)
+- `PRINT_DRIVER=file` — simpan ke file, kirim manual via script (lebih reliable)

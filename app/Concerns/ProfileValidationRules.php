@@ -38,14 +38,26 @@ trait ProfileValidationRules
      */
     protected function emailRules(?int $userId = null): array
     {
-        return [
+        $rules = [
             'required',
             'string',
             'email',
             'max:255',
-            $userId === null
-                ? Rule::unique(User::class)
-                : Rule::unique(User::class)->ignore($userId),
         ];
+        
+        $uniqueRule = Rule::unique(User::class);
+        
+        // Only add tenant_id constraint if we have a current tenant
+        if (tenant_id() !== null) {
+            $uniqueRule->where('tenant_id', tenant_id());
+        }
+        
+        if ($userId === null) {
+            $rules[] = $uniqueRule;
+        } else {
+            $rules[] = $uniqueRule->ignore($userId);
+        }
+        
+        return $rules;
     }
 }

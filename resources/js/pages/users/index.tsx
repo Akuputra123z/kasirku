@@ -1,20 +1,20 @@
+'use client';
 import { Head, router, usePage } from '@inertiajs/react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft,
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
-    CheckCircle2,
-    XCircle,
     Plus,
     Pencil,
     Trash2,
     Search,
     Users,
     Shield,
+    X,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,15 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import users from '@/routes/users';
 
 interface UserData {
     id: number;
@@ -56,7 +65,6 @@ interface PageProps extends Record<string, unknown> {
     users: Paginator<UserData>;
     roles: string[];
     filters: { search: string | null };
-    flash?: { success?: string; error?: string };
 }
 
 const roleLabels: Record<string, string> = {
@@ -73,7 +81,7 @@ const fmtDate = (s: string) =>
     });
 
 export default function UsersIndex() {
-    const { users, roles, filters, flash } = usePage<PageProps>().props;
+    const { users: data, roles, filters } = usePage<PageProps>().props;
 
     const [search, setSearch] = useState(filters.search ?? '');
     const [showForm, setShowForm] = useState(false);
@@ -86,11 +94,33 @@ export default function UsersIndex() {
         role: '',
     });
     const [loading, setLoading] = useState(false);
-    const [page, setPage] = useState(users.current_page);
 
-    const searchUsers = () => {
-        router.get('/users', { search }, { preserveState: true });
-    };
+    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const debouncedSearch = useCallback((value: string) => {
+        setSearch(value);
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        searchTimeoutRef.current = setTimeout(() => {
+            router.get(
+                users.index().url,
+                { search: value || null, page: 1 },
+                { preserveState: true },
+            );
+        }, 300);
+    }, []);
+
+    useEffect(
+        () => () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        },
+        [],
+    );
 
     const openCreate = () => {
         setEditing(null);
@@ -113,8 +143,9 @@ export default function UsersIndex() {
         setLoading(true);
 
         if (editing) {
-            router.patch(`/users/${editing.id}`, form, {
+            router.patch(users.update({ user: editing.id }).url, form, {
                 preserveScroll: true,
+                onSuccess: () => toast.success('Pengguna berhasil diperbarui.'),
                 onFinish: () => {
                     setLoading(false);
                     setShowForm(false);
@@ -122,8 +153,10 @@ export default function UsersIndex() {
                 },
             });
         } else {
-            router.post('/users', form, {
+            router.post(users.store().url, form, {
                 preserveScroll: true,
+                onSuccess: () =>
+                    toast.success('Pengguna berhasil ditambahkan.'),
                 onFinish: () => {
                     setLoading(false);
                     setShowForm(false);
@@ -133,9 +166,13 @@ export default function UsersIndex() {
     };
 
     const confirmDelete = () => {
-        if (!deleteId) return;
-        router.delete(`/users/${deleteId}`, {
+        if (!deleteId) {
+            return;
+        }
+
+        router.delete(users.destroy({ user: deleteId }).url, {
             preserveScroll: true,
+            onSuccess: () => toast.success('Pengguna berhasil dihapus.'),
             onFinish: () => setDeleteId(null),
         });
     };
@@ -162,162 +199,133 @@ export default function UsersIndex() {
                     </Button>
                 </div>
 
-                {/* Flash */}
-                <AnimatePresence>
-                    {flash?.success && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50"
-                        >
-                            <CheckCircle2 className="size-5 shrink-0" />
-                            <span className="text-sm font-medium">
-                                {flash.success}
-                            </span>
-                        </motion.div>
-                    )}
-                    {flash?.error && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-800 dark:bg-red-950/50"
-                        >
-                            <XCircle className="size-5 shrink-0" />
-                            <span className="text-sm font-medium">
-                                {flash.error}
-                            </span>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
                 {/* Search */}
-                <div className="flex gap-2">
-                    <div className="relative flex-1 md:w-72">
-                        <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            placeholder="Cari nama atau email..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            onKeyDown={(e) =>
-                                e.key === 'Enter' && searchUsers()
-                            }
-                            className="h-9 pl-9 text-[13px]"
-                        />
-                    </div>
-                    <Button
-                        onClick={searchUsers}
-                        variant="secondary"
-                        className="h-9 px-3 text-[13px]"
-                    >
-                        Cari
-                    </Button>
+                <div className="relative max-w-sm">
+                    <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        placeholder="Cari nama atau email..."
+                        value={search}
+                        onChange={(e) => debouncedSearch(e.target.value)}
+                        className="h-9 w-full pr-8 pl-9 text-[13px]"
+                    />
+                    {search && (
+                        <button
+                            onClick={() => debouncedSearch('')}
+                            className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                            <X className="size-3.5" />
+                        </button>
+                    )}
                 </div>
 
                 {/* Table */}
                 <Card className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-none dark:border-neutral-800 dark:bg-neutral-950">
                     <CardContent className="p-0">
-                        <table className="w-full text-[13px]">
-                            <thead>
-                                <tr className="border-b border-neutral-100 dark:border-neutral-900">
-                                    <th className="px-4 py-3 text-left text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Nama
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Email
-                                    </th>
-                                    <th className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Role
-                                    </th>
-                                    <th className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Bergabung
-                                    </th>
-                                    <th className="w-24 px-4 py-3 text-right text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Aksi
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {users.data.length > 0 ? (
-                                    users.data.map((u) => (
-                                        <tr
-                                            key={u.id}
-                                            className="border-b border-neutral-100 transition-colors hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/50"
-                                        >
-                                            <td className="px-4 py-3 font-semibold">
-                                                {u.name}
-                                            </td>
-                                            <td className="px-4 py-3 text-muted-foreground">
-                                                {u.email}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                {u.roles.map((r) => (
-                                                    <Badge
-                                                        key={r.id}
-                                                        variant="secondary"
-                                                        className="rounded-md text-[11px] capitalize"
-                                                    >
-                                                        <Shield className="mr-1 inline size-3" />
-                                                        {roleLabels[r.name] ??
-                                                            r.name}
-                                                    </Badge>
-                                                ))}
-                                            </td>
-                                            <td className="px-4 py-3 text-center text-sm text-muted-foreground">
-                                                {fmtDate(u.created_at)}
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <div className="flex items-center justify-end gap-1">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="size-8"
-                                                        onClick={() =>
-                                                            openEdit(u)
-                                                        }
-                                                    >
-                                                        <Pencil className="size-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="size-8 text-red-500 hover:text-red-700"
-                                                        onClick={() =>
-                                                            setDeleteId(u.id)
-                                                        }
-                                                    >
-                                                        <Trash2 className="size-3.5" />
-                                                    </Button>
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="border-b border-neutral-100 hover:bg-transparent dark:border-neutral-900">
+                                        <TableHead className="px-4 py-3 text-left text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Nama
+                                        </TableHead>
+                                        <TableHead className="px-4 py-3 text-left text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Email
+                                        </TableHead>
+                                        <TableHead className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Role
+                                        </TableHead>
+                                        <TableHead className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Bergabung
+                                        </TableHead>
+                                        <TableHead className="w-24 px-4 py-3 text-right text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Aksi
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {data.data.length > 0 ? (
+                                        data.data.map((u) => (
+                                            <TableRow
+                                                key={u.id}
+                                                className="border-b border-neutral-100 transition-colors hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/50"
+                                            >
+                                                <TableCell className="px-4 py-3 font-semibold">
+                                                    {u.name}
+                                                </TableCell>
+                                                <TableCell className="px-4 py-3 text-muted-foreground">
+                                                    {u.email}
+                                                </TableCell>
+                                                <TableCell className="px-4 py-3 text-center">
+                                                    {u.roles.map((r) => (
+                                                        <Badge
+                                                            key={r.id}
+                                                            variant="secondary"
+                                                            className="rounded-md text-[11px] capitalize"
+                                                        >
+                                                            <Shield className="mr-1 inline size-3" />
+                                                            {roleLabels[
+                                                                r.name
+                                                            ] ?? r.name}
+                                                        </Badge>
+                                                    ))}
+                                                </TableCell>
+                                                <TableCell className="px-4 py-3 text-center text-sm text-muted-foreground">
+                                                    {fmtDate(u.created_at)}
+                                                </TableCell>
+                                                <TableCell className="px-4 py-3 text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-8"
+                                                            onClick={() =>
+                                                                openEdit(u)
+                                                            }
+                                                        >
+                                                            <Pencil className="size-3.5" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-8 text-red-500 hover:text-red-700"
+                                                            onClick={() =>
+                                                                setDeleteId(
+                                                                    u.id,
+                                                                )
+                                                            }
+                                                        >
+                                                            <Trash2 className="size-3.5" />
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell
+                                                colSpan={5}
+                                                className="h-40 text-center text-muted-foreground"
+                                            >
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <Users className="size-8 text-neutral-300" />
+                                                    <p className="text-sm">
+                                                        Belum ada pengguna.
+                                                    </p>
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td
-                                            colSpan={5}
-                                            className="h-40 text-center text-muted-foreground"
-                                        >
-                                            <div className="flex flex-col items-center gap-2">
-                                                <Users className="size-8 text-neutral-300" />
-                                                <p className="text-sm">
-                                                    Belum ada pengguna.
-                                                </p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
                     </CardContent>
                 </Card>
 
                 {/* Pagination */}
-                {users.last_page > 1 && (
+                {data.last_page > 1 && (
                     <div className="flex items-center justify-between">
                         <span className="text-[13px] text-muted-foreground">
-                            {users.total} pengguna
+                            {data.total} pengguna
                         </span>
                         <div className="flex items-center gap-1.5">
                             <Button
@@ -326,12 +334,12 @@ export default function UsersIndex() {
                                 className="size-8"
                                 onClick={() =>
                                     router.get(
-                                        '/users',
+                                        users.index().url,
                                         { page: 1, search },
                                         { preserveState: true },
                                     )
                                 }
-                                disabled={users.current_page === 1}
+                                disabled={data.current_page === 1}
                             >
                                 <ChevronsLeft className="size-4" />
                             </Button>
@@ -341,20 +349,20 @@ export default function UsersIndex() {
                                 className="size-8"
                                 onClick={() =>
                                     router.get(
-                                        '/users',
+                                        users.index().url,
                                         {
-                                            page: users.current_page - 1,
+                                            page: data.current_page - 1,
                                             search,
                                         },
                                         { preserveState: true },
                                     )
                                 }
-                                disabled={users.current_page === 1}
+                                disabled={data.current_page === 1}
                             >
                                 <ChevronLeft className="size-4" />
                             </Button>
                             <span className="min-w-[80px] text-center text-[13px] text-muted-foreground">
-                                {users.current_page} / {users.last_page}
+                                {data.current_page} / {data.last_page}
                             </span>
                             <Button
                                 variant="outline"
@@ -362,17 +370,15 @@ export default function UsersIndex() {
                                 className="size-8"
                                 onClick={() =>
                                     router.get(
-                                        '/users',
+                                        users.index().url,
                                         {
-                                            page: users.current_page + 1,
+                                            page: data.current_page + 1,
                                             search,
                                         },
                                         { preserveState: true },
                                     )
                                 }
-                                disabled={
-                                    users.current_page === users.last_page
-                                }
+                                disabled={data.current_page === data.last_page}
                             >
                                 <ChevronRight className="size-4" />
                             </Button>
@@ -382,17 +388,15 @@ export default function UsersIndex() {
                                 className="size-8"
                                 onClick={() =>
                                     router.get(
-                                        '/users',
+                                        users.index().url,
                                         {
-                                            page: users.last_page,
+                                            page: data.last_page,
                                             search,
                                         },
                                         { preserveState: true },
                                     )
                                 }
-                                disabled={
-                                    users.current_page === users.last_page
-                                }
+                                disabled={data.current_page === data.last_page}
                             >
                                 <ChevronsRight className="size-4" />
                             </Button>
@@ -411,7 +415,7 @@ export default function UsersIndex() {
                     }
                 }}
             >
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>
                             {editing ? 'Edit Pengguna' : 'Tambah Pengguna'}
@@ -529,10 +533,12 @@ export default function UsersIndex() {
             <Dialog
                 open={deleteId !== null}
                 onOpenChange={(open) => {
-                    if (!open) setDeleteId(null);
+                    if (!open) {
+                        setDeleteId(null);
+                    }
                 }}
             >
-                <DialogContent className="sm:max-w-sm">
+                <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-sm">
                     <DialogHeader>
                         <DialogTitle>Hapus Pengguna</DialogTitle>
                     </DialogHeader>

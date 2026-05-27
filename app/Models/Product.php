@@ -8,11 +8,20 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\Storage;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class Product extends Model
 {
-    use HasFactory, HasTenant, SoftDeletes;
+    use HasFactory, HasTenant, LogsActivity, SoftDeletes;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['name', 'price', 'stock', 'cost_price', 'status'])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
 
     /**
      * Kolom yang dapat diisi secara massal.
@@ -24,8 +33,10 @@ class Product extends Model
         'name',
         'description',
         'price',
+        'cost_price',
         'stock',
         'category_id',
+        'brand_id',
         'image',
         'status',
     ];
@@ -46,6 +57,11 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 
     /**
@@ -78,6 +94,6 @@ class Product extends Model
             return null;
         }
 
-        return Storage::disk('public')->url($this->image);
+        return '/storage/'.$this->image;
     }
 }

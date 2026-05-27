@@ -5,13 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\PaymentMethod;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Shift;
+use App\Models\StockMovement;
 use App\Models\Transaction;
 use App\Models\TransactionDetail;
 use App\Models\Voucher;
 use App\Services\PointService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -23,6 +26,8 @@ class TransactionController extends Controller
      */
     public function index(): Response
     {
+        Gate::authorize('manage-pos');
+
         return Inertia::render('transactions/index', [
             'products' => Product::with(['category', 'variants'])
                 ->where('status', 'active')
@@ -37,14 +42,10 @@ class TransactionController extends Controller
         ]);
     }
 
-    /**
-     * Menyimpan transaksi baru dengan validasi stok dan sinkronisasi shift.
-     */
-    /**
-     * Menyimpan transaksi baru dengan validasi stok dan sinkronisasi shift.
-     */
     public function store(Request $request)
     {
+        Gate::authorize('manage-pos');
+
         // 1. Validasi Keberadaan Shift
         $activeShift = Shift::where('user_id', auth()->id())
             ->whereNull('end_time')
@@ -54,17 +55,15 @@ class TransactionController extends Controller
             return Redirect::back()->withErrors(['error' => 'Sesi Kasir (Shift) belum dibuka! Silakan buka shift terlebih dahulu.']);
         }
 
-        // 2. Validasi Input Transaksi (Dibuat lebih fleksibel agar tidak gampang error)
+        // 2. Validasi Input Transaksi
         $request->validate([
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.product_variant_id' => 'nullable|exists:product_variants,id',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.price' => 'required|numeric',
-            'subtotal_amount' => 'required|numeric',
-            'tax_amount' => 'required|numeric',
-            'discount_amount' => 'required|numeric',
-            'total_amount' => 'required|numeric',
+            'tax_amount' => 'required|numeric|min:0',
+            'discount_amount' => 'required|numeric|min:0',
             'paid_amount' => 'required|numeric',
             'payment_method_id' => 'required|exists:payment_methods,id',
             'order_type' => 'required|in:direct,service,pre_order',
@@ -74,40 +73,54 @@ class TransactionController extends Controller
             'redeemed_points' => 'nullable|integer|min:0',
         ]);
 
-        if ($request->paid_amount < $request->total_amount) {
-            return Redirect::back()->withErrors(['error' => 'Uang pembayaran tidak mencukupi.']);
-        }
-
-        // Validasi poin jika ada penukaran
-        if ($request->redeemed_points && $request->customer_id) {
-            $customer = Customer::findOrFail($request->customer_id);
-            if ($customer->loyalty_points < $request->redeemed_points) {
-                return Redirect::back()->withErrors(['error' => 'Poin pelanggan tidak mencukupi.']);
-            }
-        }
-
-        // Validasi voucher jika ada
-        if ($request->voucher_id) {
-            $voucher = Voucher::findOrFail($request->voucher_id);
-            if (! $voucher->isValid((int) $request->total_amount)) {
-                return Redirect::back()->withErrors(['error' => 'Voucher sudah tidak berlaku.']);
-            }
-        }
+        $transaction = null;
 
         try {
-            DB::transaction(function () use ($request, $activeShift) {
-                // 3. Generate Kode Transaksi Unik
+            DB::transaction(function () use ($request, $activeShift, &$transaction) {
+                // 3. Hitung ulang semua nilai keuangan di server
+                $calculatedSubtotal = 0;
+                foreach ($request->items as $item) {
+                    $calculatedSubtotal += (float) $item['price'] * (int) $item['quantity'];
+                }
+
+                $taxAmount = (float) $request->tax_amount;
+                $discountAmount = (float) $request->discount_amount;
+                $calculatedTotal = $calculatedSubtotal + $taxAmount - $discountAmount;
+                $paidAmount = (float) $request->paid_amount;
+
+                if ($paidAmount < $calculatedTotal) {
+                    throw new \Exception('Uang pembayaran tidak mencukupi.');
+                }
+
+                // 4. Validasi voucher dengan lock
+                if ($request->voucher_id) {
+                    $voucher = Voucher::lockForUpdate()->findOrFail($request->voucher_id);
+                    if (! $voucher->isValid($calculatedTotal)) {
+                        throw new \Exception('Voucher sudah tidak berlaku.');
+                    }
+                }
+
+                // 5. Validasi poin dengan lock
+                if ($request->redeemed_points && $request->customer_id) {
+                    $customer = Customer::lockForUpdate()->findOrFail($request->customer_id);
+                    if ($customer->loyalty_points < (int) $request->redeemed_points) {
+                        throw new \Exception('Poin pelanggan tidak mencukupi.');
+                    }
+                }
+
+                // 6. Generate Kode Transaksi Unik
                 $transactionCode = 'TRX-'.now()->format('Ymd').'-'.strtoupper(bin2hex(random_bytes(3)));
 
-                // 4. Simpan Header Transaksi
+                // 7. Simpan Header Transaksi (gunakan nilai server-side)
                 $transaction = Transaction::create([
+                    'tenant_id' => tenant_id(),
                     'transaction_code' => $transactionCode,
-                    'subtotal_amount' => $request->subtotal_amount,
-                    'tax_amount' => $request->tax_amount,
-                    'discount_amount' => $request->discount_amount,
-                    'total_amount' => $request->total_amount,
-                    'paid_amount' => $request->paid_amount,
-                    'change_amount' => $request->paid_amount - $request->total_amount,
+                    'subtotal_amount' => $calculatedSubtotal,
+                    'tax_amount' => $taxAmount,
+                    'discount_amount' => $discountAmount,
+                    'total_amount' => $calculatedTotal,
+                    'paid_amount' => $paidAmount,
+                    'change_amount' => $paidAmount - $calculatedTotal,
                     'payment_method_id' => $request->payment_method_id,
                     'shift_id' => $activeShift->id,
                     'user_id' => auth()->id(),
@@ -119,13 +132,23 @@ class TransactionController extends Controller
                     'redeemed_points' => $request->redeemed_points ?? 0,
                 ]);
 
-                // 5. Simpan Detail Transaksi & Update Stok
+                // 8. Simpan Detail Transaksi & Update Stok (termasuk varian)
                 foreach ($request->items as $item) {
                     $product = Product::lockForUpdate()->findOrFail($item['product_id']);
 
-                    // Cek stok sebelum potong
                     if ($product->stock < $item['quantity']) {
                         throw new \Exception("Stok {$product->name} tidak cukup (Sisa: {$product->stock})");
+                    }
+
+                    $stockBefore = $product->stock;
+
+                    // Kurangi stok varian jika ada
+                    if (! empty($item['product_variant_id'])) {
+                        $variant = ProductVariant::lockForUpdate()->findOrFail($item['product_variant_id']);
+                        if ($variant->stock < $item['quantity']) {
+                            throw new \Exception("Stok varian {$variant->name} tidak cukup (Sisa: {$variant->stock})");
+                        }
+                        $variant->decrement('stock', (int) $item['quantity']);
                     }
 
                     TransactionDetail::create([
@@ -141,14 +164,27 @@ class TransactionController extends Controller
                     ]);
 
                     $product->decrement('stock', $item['quantity']);
+
+                    StockMovement::create([
+                        'tenant_id' => tenant_id(),
+                        'product_id' => $product->id,
+                        'user_id' => auth()->id(),
+                        'type' => 'out',
+                        'quantity' => $item['quantity'],
+                        'stock_before' => $stockBefore,
+                        'stock_after' => $stockBefore - $item['quantity'],
+                        'reference_type' => Transaction::class,
+                        'reference_id' => $transaction->id,
+                        'reason' => 'pos_sale',
+                        'notes' => "TRX: {$transaction->transaction_code}",
+                    ]);
                 }
 
+                // 9. Update pemakaian voucher (dengan lock sudah diambil di atas)
                 if ($request->voucher_id) {
-                    $voucher = Voucher::findOrFail($request->voucher_id);
                     $voucher->increment('used_count');
 
                     if ($request->customer_id) {
-                        $customer = Customer::findOrFail($request->customer_id);
                         $customer->vouchers()->attach($voucher->id, [
                             'transaction_id' => $transaction->id,
                             'used_at' => now(),
@@ -156,21 +192,37 @@ class TransactionController extends Controller
                     }
                 }
 
+                // 10. Penukaran poin
                 if ($request->redeemed_points && $request->customer_id) {
-                    $customer = Customer::findOrFail($request->customer_id);
                     PointService::redeemPoints($customer, $transaction, (int) $request->redeemed_points);
                 }
 
-                if ($request->customer_id) {
-                    $customer = Customer::findOrFail($request->customer_id);
-                    PointService::earnPoints($customer, $transaction, (int) $request->total_amount);
+                // 11. Perolehan poin (gunakan customer yang sudah di-lock)
+                if ($request->customer_id && ! isset($customer)) {
+                    $customer = Customer::lockForUpdate()->findOrFail($request->customer_id);
+                }
+                if (isset($customer)) {
+                    PointService::earnPoints($customer, $transaction, (int) $calculatedTotal);
                 }
             });
 
-            return Redirect::back()->with('success', 'Transaksi berhasil diselesaikan.');
+            return Redirect::back()->with([
+                'success' => 'Transaksi berhasil diselesaikan.',
+                'transaction' => [
+                    'id' => $transaction->id,
+                    'transaction_code' => $transaction->transaction_code,
+                    'total_amount' => $transaction->total_amount,
+                    'paid_amount' => $transaction->paid_amount,
+                    'change_amount' => $transaction->change_amount,
+                    'subtotal_amount' => $transaction->subtotal_amount,
+                    'tax_amount' => $transaction->tax_amount,
+                    'discount_amount' => $transaction->discount_amount,
+                    'order_type' => $transaction->order_type,
+                    'created_at' => $transaction->created_at,
+                ],
+            ]);
 
         } catch (\Exception $e) {
-            // Mengembalikan pesan error yang jelas ke Inertia
             return Redirect::back()->withErrors(['error' => 'Gagal Checkout: '.$e->getMessage()]);
         }
     }
@@ -180,6 +232,8 @@ class TransactionController extends Controller
      */
     public function history(): Response
     {
+        Gate::authorize('view-history');
+
         // Menggunakan Pagination untuk efisiensi beban kerja MacBook Air Anda
         $transactions = Transaction::with(['details.product', 'user', 'paymentMethod', 'customer', 'voucher'])
             ->withCount('pointTransactions')

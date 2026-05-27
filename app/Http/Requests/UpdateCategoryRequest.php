@@ -17,7 +17,7 @@ class UpdateCategoryRequest extends FormRequest
         $categoryId = $this->route('category');
 
         return [
-            'name' => ['required', 'string', 'max:255', Rule::unique('categories', 'name')->ignore($categoryId)],
+            'name' => ['required', 'string', 'max:255', Rule::unique('categories', 'name')->whereNull('deleted_at')->where('tenant_id', tenant_id())->ignore($categoryId)],
             'description' => ['nullable', 'string', 'max:500'],
         ];
     }

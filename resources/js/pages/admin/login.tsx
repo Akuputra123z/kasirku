@@ -1,8 +1,9 @@
+'use client';
+
 import { useForm } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
 import { FormEventHandler } from 'react';
 import { LogIn, Shield } from 'lucide-react';
-import AuthLayout from '@/layouts/auth-layout';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
@@ -34,13 +35,15 @@ export default function AdminLogin() {
         <>
             <Head title="Admin - Masuk" />
 
-            <Card className="w-full max-w-md">
+            <Card className="w-full max-w-md border-gray-100 shadow-lg shadow-indigo-100/30">
                 <CardHeader className="text-center">
-                    <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-full bg-primary/10">
-                        <Shield className="size-7 text-primary" />
+                    <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-400 to-purple-500 shadow-sm">
+                        <Shield className="size-7 text-white" />
                     </div>
-                    <CardTitle className="text-xl">Panel Admin</CardTitle>
-                    <CardDescription>
+                    <CardTitle className="text-xl text-gray-900">
+                        Panel Admin
+                    </CardTitle>
+                    <CardDescription className="text-gray-500">
                         Masuk sebagai administrator pusat
                     </CardDescription>
                 </CardHeader>
@@ -59,6 +62,7 @@ export default function AdminLogin() {
                                 autoFocus
                                 autoComplete="email"
                                 placeholder="superadmin@mypos.com"
+                                className="border-gray-200 transition-all focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                             />
                             <InputError message={errors.email} />
                         </div>
@@ -74,6 +78,7 @@ export default function AdminLogin() {
                                 required
                                 autoComplete="current-password"
                                 placeholder="Masukkan password"
+                                className="border-gray-200 transition-all focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                             />
                             <InputError message={errors.password} />
                         </div>
@@ -85,6 +90,7 @@ export default function AdminLogin() {
                                 onCheckedChange={(checked) =>
                                     setData('remember', !!checked)
                                 }
+                                className="data-[state=checked]:border-indigo-600 data-[state=checked]:bg-indigo-600"
                             />
                             <Label
                                 htmlFor="remember"
@@ -96,7 +102,7 @@ export default function AdminLogin() {
 
                         <Button
                             type="submit"
-                            className="w-full gap-2"
+                            className="w-full gap-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg shadow-indigo-200/50 transition-all hover:brightness-90 active:scale-[0.97]"
                             disabled={processing}
                         >
                             {processing ? (
@@ -118,7 +124,7 @@ export default function AdminLogin() {
                         Login untuk pengguna toko?{' '}
                         <a
                             href="/login"
-                            className="font-medium text-primary underline-offset-4 hover:underline"
+                            className="font-bold text-indigo-600 underline-offset-4 hover:text-indigo-700 hover:underline"
                         >
                             Masuk di sini
                         </a>
@@ -130,6 +136,6 @@ export default function AdminLogin() {
 }
 
 AdminLogin.layout = {
-    title: 'Admin Panel',
+    title: 'Panel Admin',
     description: 'Masuk sebagai administrator pusat',
 };

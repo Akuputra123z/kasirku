@@ -7,6 +7,14 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+interface ProductVariant {
+    id?: number;
+    name: string;
+    additional_price: number | string;
+    stock: number | string;
+    sku: string | null;
+}
+
 interface VariantManagerProps {
     variants: ProductVariant[];
     onChange: (variants: ProductVariant[]) => void;
@@ -140,15 +148,21 @@ export function VariantManager({ variants, onChange }: VariantManagerProps) {
                                 </div>
                                 <Input
                                     type="number"
+                                    min="0"
                                     placeholder="0"
                                     value={variant.stock}
-                                    onChange={(e) =>
-                                        updateVariant(
-                                            index,
-                                            'stock',
-                                            e.target.value,
-                                        )
-                                    }
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val.startsWith('-')) {
+                                            updateVariant(
+                                                index,
+                                                'stock',
+                                                val.replace('-', ''),
+                                            );
+                                        } else {
+                                            updateVariant(index, 'stock', val);
+                                        }
+                                    }}
                                     className="h-10 rounded-xl border-neutral-100 bg-neutral-50/50 text-center text-[13px] font-bold transition-all focus:bg-white dark:border-neutral-800 dark:bg-neutral-950/50 dark:focus:bg-neutral-950"
                                 />
                             </div>

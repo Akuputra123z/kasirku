@@ -1,3 +1,4 @@
+'use client';
 import { Icon } from '@iconify/react';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import { useRef, useState } from 'react';
@@ -17,13 +18,22 @@ export default function StoreSettings() {
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const currentTheme = (tenant?.color_theme ?? 'default') as ColorTheme;
 
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors } = useForm<{
+        name: string;
+        address: string;
+        phone: string;
+        logo: File | null;
+        color_theme: ColorTheme;
+        receipt_footer: string;
+        _method: 'PATCH';
+    }>({
         name: tenant?.name ?? '',
         address: tenant?.address ?? '',
         phone: tenant?.phone ?? '',
-        logo: null as File | null,
+        logo: null,
         color_theme: currentTheme,
-        _method: 'PATCH' as const,
+        receipt_footer: (tenant as any)?.settings?.receipt_footer ?? 'TERIMA KASIH',
+        _method: 'PATCH',
     });
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -104,6 +114,23 @@ export default function StoreSettings() {
                             placeholder="Phone number"
                         />
                         <InputError message={errors.phone} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="receipt_footer">
+                            Receipt Footer Text
+                        </Label>
+                        <Input
+                            id="receipt_footer"
+                            value={data.receipt_footer}
+                            onChange={(e) =>
+                                setData('receipt_footer', e.target.value)
+                            }
+                            placeholder="TERIMA KASIH"
+                        />
+                        <p className="text-[11px] font-medium text-neutral-400">
+                            Appears at the bottom of printed receipts
+                        </p>
+                        <InputError message={errors.receipt_footer} />
                     </div>
 
                     <div className="border-t border-neutral-200 pt-6 dark:border-neutral-800">

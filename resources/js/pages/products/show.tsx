@@ -1,4 +1,6 @@
+'use client';
 import { Head, Link } from '@inertiajs/react';
+import products from '@/routes/products';
 import {
     ArrowLeft,
     Package,
@@ -20,6 +22,11 @@ interface ProductVariant {
     additional_price: number;
 }
 
+interface Brand {
+    id: number;
+    name: string;
+}
+
 interface Product {
     id: number;
     name: string;
@@ -27,10 +34,12 @@ interface Product {
     price: number;
     stock: number;
     category_id: number;
+    brand_id: number | null;
     image: string | null;
     image_url: string | null;
     status: string;
     category?: { id: number; name: string };
+    brand?: Brand;
     variants?: ProductVariant[];
     created_at: string;
     updated_at: string;
@@ -49,11 +58,11 @@ export default function ShowProduct({ product }: Props) {
 
     return (
         <div className="font-geist min-h-screen space-y-6 bg-white p-4 md:p-8 dark:bg-neutral-950">
-            <Head title={`Product - ${product.name}`} />
+            <Head title={`Produk - ${product.name}`} />
 
             {/* HEADER */}
             <div className="flex items-center gap-4">
-                <Link href={route('products.index')}>
+                <Link href={products.index().url}>
                     <Button
                         variant="ghost"
                         size="icon"
@@ -64,10 +73,10 @@ export default function ShowProduct({ product }: Props) {
                 </Link>
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">
-                        Product Details
+                        Detail Produk
                     </h1>
                     <p className="mt-0.5 text-[13px] text-muted-foreground">
-                        View detailed information about PROD-
+                        Lihat informasi detail PROD-
                         {product.id.toString().padStart(4, '0')}
                     </p>
                 </div>
@@ -88,7 +97,7 @@ export default function ShowProduct({ product }: Props) {
                                 <div className="flex flex-col items-center gap-3 text-neutral-400">
                                     <Package className="size-16" />
                                     <span className="text-sm font-medium">
-                                        No Image Available
+                                        Tidak Ada Gambar
                                     </span>
                                 </div>
                             )}
@@ -105,7 +114,7 @@ export default function ShowProduct({ product }: Props) {
                                             className="bg-neutral-50 text-[10px] font-bold text-neutral-500 uppercase dark:bg-neutral-900"
                                         >
                                             {product.category?.name ||
-                                                'Uncategorized'}
+                                                'Tanpa Kategori'}
                                         </Badge>
                                     </div>
                                 </div>
@@ -114,14 +123,14 @@ export default function ShowProduct({ product }: Props) {
                                         <>
                                             <CheckCircle2 className="size-3.5 text-blue-500" />
                                             <span className="text-[11px] font-bold tracking-wider uppercase">
-                                                Active
+                                                Aktif
                                             </span>
                                         </>
                                     ) : (
                                         <>
                                             <XCircle className="size-3.5 text-neutral-400" />
                                             <span className="text-[11px] font-bold tracking-wider text-neutral-500 uppercase">
-                                                Inactive
+                                                Tidak Aktif
                                             </span>
                                         </>
                                     )}
@@ -137,7 +146,7 @@ export default function ShowProduct({ product }: Props) {
                         <CardHeader className="border-b border-neutral-100 pb-4 dark:border-neutral-900">
                             <CardTitle className="flex items-center gap-2 text-lg">
                                 <LayoutGrid className="size-5 text-neutral-500" />
-                                Specifications
+                                Spesifikasi
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="grid gap-6 p-6">
@@ -146,7 +155,7 @@ export default function ShowProduct({ product }: Props) {
                                     <div className="flex items-center gap-1.5 text-neutral-500">
                                         <Banknote className="size-4" />
                                         <span className="text-[12px] font-bold uppercase">
-                                            Base Price
+                                            Harga Dasar
                                         </span>
                                     </div>
                                     <p className="text-lg font-black text-[#2d5a4e] dark:text-[#458f7c]">
@@ -157,7 +166,7 @@ export default function ShowProduct({ product }: Props) {
                                     <div className="flex items-center gap-1.5 text-neutral-500">
                                         <Layers className="size-4" />
                                         <span className="text-[12px] font-bold uppercase">
-                                            Stock
+                                            Stok
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -167,10 +176,21 @@ export default function ShowProduct({ product }: Props) {
                                         <p className="text-lg font-bold">
                                             {product.stock}{' '}
                                             <span className="text-[13px] font-medium text-neutral-500">
-                                                units
+                                                unit
                                             </span>
                                         </p>
                                     </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-1.5 text-neutral-500">
+                                        <Tag className="size-4" />
+                                        <span className="text-[12px] font-bold uppercase">
+                                            Merek
+                                        </span>
+                                    </div>
+                                    <p className="text-lg font-bold">
+                                        {product.brand?.name || '—'}
+                                    </p>
                                 </div>
                             </div>
 
@@ -180,12 +200,12 @@ export default function ShowProduct({ product }: Props) {
                                 <div className="flex items-center gap-1.5 text-neutral-500">
                                     <Tag className="size-4" />
                                     <span className="text-[12px] font-bold uppercase">
-                                        Description
+                                        Deskripsi
                                     </span>
                                 </div>
                                 <p className="text-[14px] leading-relaxed text-neutral-600 dark:text-neutral-300">
                                     {product.description ||
-                                        'No description provided for this product.'}
+                                        'Tidak ada deskripsi untuk produk ini.'}
                                 </p>
                             </div>
                         </CardContent>
@@ -195,7 +215,7 @@ export default function ShowProduct({ product }: Props) {
                         <CardHeader className="border-b border-neutral-100 pb-4 dark:border-neutral-900">
                             <CardTitle className="flex items-center gap-2 text-lg">
                                 <Layers className="size-5 text-neutral-500" />
-                                Product Variants
+                                Varian Produk
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-0">
@@ -234,7 +254,7 @@ export default function ShowProduct({ product }: Props) {
                                 <div className="flex flex-col items-center justify-center p-8 text-center text-neutral-400">
                                     <Layers className="mb-3 size-10 text-neutral-300" />
                                     <p className="text-[13px] font-medium">
-                                        No variants configured for this product.
+                                        Belum ada varian untuk produk ini.
                                     </p>
                                 </div>
                             )}

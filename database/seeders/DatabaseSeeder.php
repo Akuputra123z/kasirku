@@ -41,5 +41,6 @@ class DatabaseSeeder extends Seeder
         $kasir->assignRole('kasir');
 
         (new CategorySeeder)->run($tenant->id);
+        (new BrandSeeder)->run($tenant->id);
     }
 }

@@ -1,3 +1,4 @@
+'use client';
 import { Head } from '@inertiajs/react';
 import { Check, Monitor, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,12 +36,12 @@ function ThemeCard({
         >
             {/* Color swatches */}
             <div className="flex gap-1.5" aria-hidden>
-                {(['primary', 'sidebar-primary', 'ring'] as const).map(
+                {(['primary', 'sidebar', 'ring'] as const).map(
                     (key) => (
                         <div
                             key={key}
                             className="size-7 rounded-full ring-1 ring-black/5"
-                            style={{ backgroundColor: theme.colors[key] }}
+                            style={{ backgroundColor: (theme.colors as any)[key] }}
                         />
                     ),
                 )}

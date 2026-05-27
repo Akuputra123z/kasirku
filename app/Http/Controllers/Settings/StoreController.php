@@ -34,6 +34,10 @@ class StoreController extends Controller
             'phone' => ['nullable', 'string', 'max:50'],
             'logo' => ['nullable', 'image', 'max:2048'],
             'color_theme' => ['nullable', 'string', 'in:default,emerald,violet,amber,rose,blue,slate'],
+            'points_per_currency' => ['nullable', 'integer', 'min:1', 'max:1000000'],
+            'point_value' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'min_redeem_points' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'receipt_footer' => ['nullable', 'string', 'max:200'],
         ]);
 
         $tenant->name = $validated['name'];
@@ -50,6 +54,14 @@ class StoreController extends Controller
         if (isset($validated['color_theme'])) {
             $tenant->color_theme = $validated['color_theme'];
         }
+
+        $settings = array_merge($tenant->settings ?? [], [
+            'points_per_currency' => (int) ($validated['points_per_currency'] ?? 10000),
+            'point_value' => (int) ($validated['point_value'] ?? 100),
+            'min_redeem_points' => (int) ($validated['min_redeem_points'] ?? 100),
+            'receipt_footer' => $validated['receipt_footer'] ?? 'TERIMA KASIH',
+        ]);
+        $tenant->settings = $settings;
 
         $tenant->save();
 

@@ -56,18 +56,16 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
             >
                 {/* Header Toko */}
                 <div className="mb-4 text-center">
-                    <h2 className="text-[18px] font-bold uppercase tracking-wide">
+                    <h2 className="text-[18px] font-bold tracking-wide uppercase">
                         AMERTA KOMPUTER
                     </h2>
-                    <p className="text-[11px]">
-                        Jl. Diponegoro No.88, Rembang
-                    </p>
+                    <p className="text-[11px]">Jl. Diponegoro No.88, Rembang</p>
                     <p className="text-[11px]">Telp: 085740724793</p>
                 </div>
 
                 {/* No. Resi */}
                 <div className="mb-3 border-y-2 border-black py-2 text-center">
-                    <p className="text-[10px] uppercase tracking-widest opacity-60">
+                    <p className="text-[10px] tracking-widest uppercase opacity-60">
                         No. Resi
                     </p>
                     <p className="text-[16px] font-black tracking-tight">
@@ -145,7 +143,9 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
                 <div className="mb-4 space-y-1 text-[11px]">
                     <div className="flex justify-between">
                         <span className="opacity-60">Subtotal</span>
-                        <span>{formatCurrency(transaction.subtotal_amount)}</span>
+                        <span>
+                            {formatCurrency(transaction.subtotal_amount)}
+                        </span>
                     </div>
                     {transaction.discount_amount > 0 && (
                         <div className="flex justify-between">
@@ -158,7 +158,9 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
                     {transaction.tax_amount > 0 && (
                         <div className="flex justify-between">
                             <span className="opacity-60">Pajak</span>
-                            <span>{formatCurrency(transaction.tax_amount)}</span>
+                            <span>
+                                {formatCurrency(transaction.tax_amount)}
+                            </span>
                         </div>
                     )}
                     <div className="flex justify-between border-t-2 border-black pt-1 text-[14px] font-black">
@@ -177,7 +179,7 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
 
                 {/* Footer */}
                 <div className="mt-4 border-t-2 border-black pt-3 text-center text-[11px]">
-                    <p className="font-bold text-[14px]">TERIMA KASIH</p>
+                    <p className="text-[14px] font-bold">TERIMA KASIH</p>
                     <p>Barang yang sudah dibeli tidak dapat</p>
                     <p>ditukar atau dikembalikan</p>
                     <div className="mt-3 text-[9px] opacity-40">

@@ -22,5 +22,9 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('manage-settings', fn ($user) => $user->can('manage-settings'));
         Gate::define('manage-users', fn ($user) => $user->can('manage-users'));
         Gate::define('manage-vouchers', fn ($user) => $user->can('manage-vouchers'));
+        Gate::define('manage-purchases', fn ($user) => $user->can('manage-purchases'));
+        Gate::define('manage-suppliers', fn ($user) => $user->can('manage-suppliers'));
+        Gate::define('manage-stock', fn ($user) => $user->can('manage-stock'));
+        Gate::define('manage-brands', fn ($user) => $user->can('manage-brands'));
     }
 }

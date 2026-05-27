@@ -10,10 +10,10 @@ interface Stats {
     totalSales: number;
     weeklySales: number;
     totalOrders: number;
-    earningsGrowth: number;
-    weeklyGrowth: number;
-    salesGrowth: number;
-    ordersGrowth: number;
+    earningsGrowth: number | null;
+    weeklyGrowth: number | null;
+    salesGrowth: number | null;
+    ordersGrowth: number | null;
 }
 
 interface StatisticsBlockProps {
@@ -28,38 +28,48 @@ const fmt = (val: number) =>
     }).format(val);
 
 const StatisticsBlock = ({ stats }: StatisticsBlockProps) => {
+    const badgeVariant = (
+        val: number | null,
+    ): { text: string; style: string } => {
+        if (val === null)
+            return {
+                text: '—',
+                style: 'bg-neutral-200/50 text-muted-foreground',
+            };
+        const prefix = val >= 0 ? '+' : '';
+        return {
+            text: `${prefix}${val}%`,
+            style: val >= 0 ? 'bg-teal-400/10' : 'bg-red-500/10',
+        };
+    };
+
     const mainMetrics = [
         {
             label: 'Earnings',
             value: fmt(stats.totalEarnings),
-            percentage: `${stats.earningsGrowth >= 0 ? '+' : ''}${stats.earningsGrowth}%`,
-            isPositive: stats.earningsGrowth >= 0,
+            badge: badgeVariant(stats.earningsGrowth),
         },
         {
             label: 'Sales',
             value: stats.totalSales.toLocaleString('id-ID'),
-            percentage: `${stats.salesGrowth >= 0 ? '+' : ''}${stats.salesGrowth}%`,
-            isPositive: stats.salesGrowth >= 0,
+            badge: badgeVariant(stats.salesGrowth),
         },
     ];
 
     const secondaryStats: {
         title: string;
         value: string;
-        percentage: string;
-        isPositive: boolean;
+        badge: { text: string; style: string };
     }[] = [
         {
             title: 'Weekly Sales',
             value: fmt(stats.weeklySales),
-            percentage: `${stats.weeklyGrowth >= 0 ? '+' : ''}${stats.weeklyGrowth}%`,
-            isPositive: stats.weeklyGrowth >= 0,
+            badge: badgeVariant(stats.weeklyGrowth),
         },
         {
             title: 'Monthly Orders',
             value: stats.totalOrders.toLocaleString('id-ID'),
-            percentage: `${stats.ordersGrowth >= 0 ? '+' : ''}${stats.ordersGrowth}%`,
-            isPositive: stats.ordersGrowth >= 0,
+            badge: badgeVariant(stats.ordersGrowth),
         },
     ];
 
@@ -94,12 +104,10 @@ const StatisticsBlock = ({ stats }: StatisticsBlockProps) => {
                                                 <Badge
                                                     className={cn(
                                                         'font-normal text-muted-foreground',
-                                                        metric.isPositive
-                                                            ? 'bg-teal-400/10'
-                                                            : 'bg-red-500/10',
+                                                        metric.badge.style,
                                                     )}
                                                 >
-                                                    {metric.percentage}
+                                                    {metric.badge.text}
                                                 </Badge>
                                             </div>
                                         </div>
@@ -143,12 +151,10 @@ const StatisticsBlock = ({ stats }: StatisticsBlockProps) => {
                                         <Badge
                                             className={cn(
                                                 'font-normal text-muted-foreground',
-                                                stat.isPositive !== false
-                                                    ? 'bg-teal-400/10'
-                                                    : 'bg-red-500/10',
+                                                stat.badge.style,
                                             )}
                                         >
-                                            {stat.percentage}
+                                            {stat.badge.text}
                                         </Badge>
                                     </div>
                                 </div>

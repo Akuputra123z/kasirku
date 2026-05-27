@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Voucher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class VoucherController extends Controller
@@ -30,7 +31,7 @@ class VoucherController extends Controller
         Gate::authorize('manage-vouchers');
 
         $validated = $request->validate([
-            'code' => 'required|string|max:50|unique:vouchers,code',
+            'code' => ['required', 'string', 'max:50', Rule::unique('vouchers', 'code')->whereNull('deleted_at')->where('tenant_id', tenant_id())],
             'name' => 'required|string|max:255',
             'type' => 'required|in:percentage,fixed',
             'value' => 'required|numeric|min:0',
@@ -52,7 +53,7 @@ class VoucherController extends Controller
         Gate::authorize('manage-vouchers');
 
         $validated = $request->validate([
-            'code' => 'required|string|max:50|unique:vouchers,code,'.$voucher->id,
+            'code' => ['required', 'string', 'max:50', Rule::unique('vouchers', 'code')->whereNull('deleted_at')->where('tenant_id', tenant_id())->ignore($voucher->id)],
             'name' => 'required|string|max:255',
             'type' => 'required|in:percentage,fixed',
             'value' => 'required|numeric|min:0',
@@ -91,11 +92,11 @@ class VoucherController extends Controller
             return response()->json(['valid' => false, 'message' => 'Kode voucher tidak ditemukan.']);
         }
 
-        if (! $voucher->isValid((int) $request->order_amount)) {
+        if (! $voucher->isValid((float) $request->order_amount)) {
             return response()->json(['valid' => false, 'message' => 'Voucher sudah tidak berlaku atau tidak memenuhi syarat.']);
         }
 
-        $discount = $voucher->calculateDiscount((int) $request->order_amount);
+        $discount = $voucher->calculateDiscount((float) $request->order_amount);
 
         return response()->json([
             'valid' => true,

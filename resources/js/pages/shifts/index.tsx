@@ -1,3 +1,4 @@
+'use client';
 import { Head, router, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -12,7 +13,6 @@ import {
     Play,
     Search,
     StopCircle,
-    XCircle,
     TrendingUp,
     TrendingDown,
     Minus,
@@ -21,9 +21,11 @@ import {
     ShoppingBag,
     Info,
     ArrowRight,
+    X,
 } from 'lucide-react';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -152,7 +154,7 @@ function Modal({
 }) {
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>{title}</DialogTitle>
                 </DialogHeader>
@@ -204,7 +206,7 @@ function StatCard({
 
 // ---- Main Page ----
 export default function ShiftsIndex() {
-    const { shifts, active_shift, flash } = usePage<PageProps>().props;
+    const { shifts, active_shift } = usePage<PageProps>().props;
 
     const [startModal, setStartModal] = useState(false);
     const [closeModal, setCloseModal] = useState(false);
@@ -215,11 +217,31 @@ export default function ShiftsIndex() {
 
     const [loading, setLoading] = useState(false);
 
+    const [searchInput, setSearchInput] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [rowsPerPage, setRowsPerPage] = useState(10);
 
     const [expandedShift, setExpandedShift] = useState<number | null>(null);
+
+    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const debouncedSearch = useCallback((value: string) => {
+        setSearchInput(value);
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = setTimeout(() => {
+            setSearchQuery(value);
+            setCurrentPage(1);
+        }, 300);
+    }, []);
+
+    useEffect(
+        () => () => {
+            if (searchTimeoutRef.current)
+                clearTimeout(searchTimeoutRef.current);
+        },
+        [],
+    );
 
     // ---- Filter ----
     const filteredShifts = useMemo(() => {
@@ -254,6 +276,12 @@ export default function ShiftsIndex() {
             { starting_cash: startingCash },
             {
                 preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Shift berhasil dibuka');
+                },
+                onError: () => {
+                    toast.error('Gagal membuka shift');
+                },
                 onFinish: () => {
                     setLoading(false);
                     setStartModal(false);
@@ -274,6 +302,12 @@ export default function ShiftsIndex() {
             { actual_cash: actualCash, notes },
             {
                 preserveScroll: true,
+                onSuccess: () => {
+                    toast.success('Shift berhasil ditutup');
+                },
+                onError: () => {
+                    toast.error('Gagal menutup shift');
+                },
                 onFinish: () => {
                     setLoading(false);
                     setCloseModal(false);
@@ -325,36 +359,6 @@ export default function ShiftsIndex() {
                         </Button>
                     )}
                 </div>
-
-                {/* ALERT */}
-                <AnimatePresence>
-                    {flash?.success && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50"
-                        >
-                            <CheckCircle2 className="size-5 shrink-0" />
-                            <span className="text-sm font-medium">
-                                {flash.success}
-                            </span>
-                        </motion.div>
-                    )}
-                    {flash?.error && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -10 }}
-                            className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-800 dark:bg-red-950/50"
-                        >
-                            <XCircle className="size-5 shrink-0" />
-                            <span className="text-sm font-medium">
-                                {flash.error}
-                            </span>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
 
                 {/* ACTIVE SHIFT CARD */}
                 {active_shift && (
@@ -416,221 +420,242 @@ export default function ShiftsIndex() {
                         <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
                             placeholder="Cari kasir atau tanggal..."
-                            value={searchQuery}
-                            onChange={(e) => {
-                                setSearchQuery(e.target.value);
-                                setCurrentPage(1);
-                            }}
-                            className="h-9 pl-9 text-[13px]"
+                            value={searchInput}
+                            onChange={(e) => debouncedSearch(e.target.value)}
+                            className="h-9 pr-8 pl-9 text-[13px]"
                         />
+                        {searchInput && (
+                            <button
+                                onClick={() => debouncedSearch('')}
+                                className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                                <X className="size-3.5" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
                 {/* TABLE */}
                 <Card className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-none dark:border-neutral-800 dark:bg-neutral-950">
-                    <CardContent className="p-0">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="border-b border-neutral-100 hover:bg-transparent dark:border-neutral-900">
-                                    <TableHead className="text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Kasir
-                                    </TableHead>
-                                    <TableHead className="text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Mulai
-                                    </TableHead>
-                                    <TableHead className="text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Durasi
-                                    </TableHead>
-                                    <TableHead className="text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Status
-                                    </TableHead>
-                                    <TableHead className="text-right text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Modal
-                                    </TableHead>
-                                    <TableHead className="text-right text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Penjualan
-                                    </TableHead>
-                                    <TableHead className="text-right text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Ekspektasi
-                                    </TableHead>
-                                    <TableHead className="text-right text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Aktual
-                                    </TableHead>
-                                    <TableHead className="text-right text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Selisih
-                                    </TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                <AnimatePresence mode="popLayout">
-                                    {paginatedShifts.length > 0 ? (
-                                        paginatedShifts.map((shift) => {
-                                            const sales =
-                                                shift.transactions_sum_total_amount ??
-                                                0;
-                                            const expected =
-                                                shift.expected_cash ??
-                                                (shift.end_time
-                                                    ? shift.starting_cash +
-                                                      sales
-                                                    : null);
-                                            const diff =
-                                                shift.actual_cash != null &&
-                                                expected != null
-                                                    ? shift.actual_cash -
-                                                      expected
-                                                    : null;
-                                            const isActive = !shift.end_time;
-                                            const hasIssue =
-                                                diff != null && diff !== 0;
+                    <div className="overflow-x-auto">
+                        <CardContent className="p-0">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="border-b border-neutral-100 hover:bg-transparent dark:border-neutral-900">
+                                        <TableHead className="text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Kasir
+                                        </TableHead>
+                                        <TableHead className="text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Mulai
+                                        </TableHead>
+                                        <TableHead className="text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Durasi
+                                        </TableHead>
+                                        <TableHead className="text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Status
+                                        </TableHead>
+                                        <TableHead className="text-right text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Modal
+                                        </TableHead>
+                                        <TableHead className="text-right text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Penjualan
+                                        </TableHead>
+                                        <TableHead className="text-right text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Ekspektasi
+                                        </TableHead>
+                                        <TableHead className="text-right text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Aktual
+                                        </TableHead>
+                                        <TableHead className="text-right text-[12px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Selisih
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    <AnimatePresence mode="popLayout">
+                                        {paginatedShifts.length > 0 ? (
+                                            paginatedShifts.map((shift) => {
+                                                const sales =
+                                                    shift.transactions_sum_total_amount ??
+                                                    0;
+                                                const expected =
+                                                    shift.expected_cash ??
+                                                    (shift.end_time
+                                                        ? shift.starting_cash +
+                                                          sales
+                                                        : null);
+                                                const diff =
+                                                    shift.actual_cash != null &&
+                                                    expected != null
+                                                        ? shift.actual_cash -
+                                                          expected
+                                                        : null;
+                                                const isActive =
+                                                    !shift.end_time;
+                                                const hasIssue =
+                                                    diff != null && diff !== 0;
 
-                                            return (
-                                                <motion.tr
-                                                    key={shift.id}
-                                                    initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
-                                                    exit={{ opacity: 0 }}
-                                                    layout
-                                                    onClick={() =>
-                                                        setExpandedShift(
-                                                            expandedShift ===
-                                                                shift.id
-                                                                ? null
-                                                                : shift.id,
-                                                        )
-                                                    }
-                                                    className={cn(
-                                                        'group cursor-pointer border-b border-neutral-100 transition-colors hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/50',
-                                                        isActive &&
-                                                            'bg-emerald-50/50 dark:bg-emerald-950/20',
-                                                    )}
+                                                return (
+                                                    <motion.tr
+                                                        key={shift.id}
+                                                        initial={{ opacity: 0 }}
+                                                        animate={{ opacity: 1 }}
+                                                        exit={{ opacity: 0 }}
+                                                        layout
+                                                        onClick={() =>
+                                                            setExpandedShift(
+                                                                expandedShift ===
+                                                                    shift.id
+                                                                    ? null
+                                                                    : shift.id,
+                                                            )
+                                                        }
+                                                        className={cn(
+                                                            'group cursor-pointer border-b border-neutral-100 transition-colors hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/50',
+                                                            isActive &&
+                                                                'bg-emerald-50/50 dark:bg-emerald-950/20',
+                                                        )}
+                                                    >
+                                                        <TableCell className="py-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="flex size-9 items-center justify-center rounded-full bg-neutral-100 text-xs font-bold dark:bg-neutral-900">
+                                                                    {shift.user?.name?.charAt(
+                                                                        0,
+                                                                    ) ?? '?'}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-[13px] font-semibold">
+                                                                        {shift
+                                                                            .user
+                                                                            ?.name ??
+                                                                            'Unknown User'}
+                                                                    </p>
+                                                                    <p className="text-[11px] text-muted-foreground">
+                                                                        {shift
+                                                                            .user
+                                                                            ?.email ??
+                                                                            '-'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="py-3 text-[13px] text-muted-foreground">
+                                                            {fmtDate(
+                                                                shift.start_time,
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="py-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <Clock className="size-3.5 text-muted-foreground" />
+                                                                <span className="text-[13px] font-medium">
+                                                                    {duration(
+                                                                        shift.start_time,
+                                                                        shift.end_time,
+                                                                    )}
+                                                                </span>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="py-3">
+                                                            {isActive ? (
+                                                                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/50 dark:text-emerald-300">
+                                                                    Aktif
+                                                                </Badge>
+                                                            ) : hasIssue ? (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
+                                                                >
+                                                                    Selesai
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="border-neutral-200 bg-neutral-50 text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400"
+                                                                >
+                                                                    Selesai
+                                                                </Badge>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="py-3 text-right text-[13px] font-medium">
+                                                            {fmt(
+                                                                shift.starting_cash,
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="py-3 text-right text-[13px] font-medium">
+                                                            {fmt(sales)}
+                                                        </TableCell>
+                                                        <TableCell className="py-3 text-right text-[13px] font-medium">
+                                                            {fmt(expected)}
+                                                        </TableCell>
+                                                        <TableCell className="py-3 text-right text-[13px] font-medium">
+                                                            {fmt(
+                                                                shift.actual_cash,
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="py-3 text-right">
+                                                            {diff != null ? (
+                                                                <span
+                                                                    className={cn(
+                                                                        'inline-flex items-center gap-1 text-[13px] font-bold',
+                                                                        diff >
+                                                                            0 &&
+                                                                            'text-emerald-600 dark:text-emerald-400',
+                                                                        diff <
+                                                                            0 &&
+                                                                            'text-red-600 dark:text-red-400',
+                                                                        diff ===
+                                                                            0 &&
+                                                                            'text-neutral-500',
+                                                                    )}
+                                                                >
+                                                                    {diff > 0
+                                                                        ? '+'
+                                                                        : ''}
+                                                                    {fmt(diff)}
+                                                                    {diff >
+                                                                        0 && (
+                                                                        <TrendingUp className="size-3.5" />
+                                                                    )}
+                                                                    {diff <
+                                                                        0 && (
+                                                                        <TrendingDown className="size-3.5" />
+                                                                    )}
+                                                                    {diff ===
+                                                                        0 && (
+                                                                        <CheckCircle2 className="size-3.5 text-emerald-500" />
+                                                                    )}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[13px] text-muted-foreground">
+                                                                    —
+                                                                </span>
+                                                            )}
+                                                        </TableCell>
+                                                    </motion.tr>
+                                                );
+                                            })
+                                        ) : (
+                                            <TableRow>
+                                                <TableCell
+                                                    colSpan={9}
+                                                    className="h-52 text-center"
                                                 >
-                                                    <TableCell className="py-3">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="flex size-9 items-center justify-center rounded-full bg-neutral-100 text-xs font-bold dark:bg-neutral-900">
-                                                                {shift.user?.name?.charAt(
-                                                                    0,
-                                                                ) ?? '?'}
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-[13px] font-semibold">
-                                                                    {shift.user?.name ?? 'Unknown User'}
-                                                                </p>
-                                                                <p className="text-[11px] text-muted-foreground">
-                                                                    {shift.user?.email ?? '-'}
-                                                                </p>
-                                                            </div>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-[13px] text-muted-foreground">
-                                                        {fmtDate(
-                                                            shift.start_time,
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="py-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <Clock className="size-3.5 text-muted-foreground" />
-                                                            <span className="text-[13px] font-medium">
-                                                                {duration(
-                                                                    shift.start_time,
-                                                                    shift.end_time,
-                                                                )}
-                                                            </span>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="py-3">
-                                                        {isActive ? (
-                                                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/50 dark:text-emerald-300">
-                                                                Aktif
-                                                            </Badge>
-                                                        ) : hasIssue ? (
-                                                            <Badge
-                                                                variant="outline"
-                                                                className="border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300"
-                                                            >
-                                                                Selesai
-                                                            </Badge>
-                                                        ) : (
-                                                            <Badge
-                                                                variant="outline"
-                                                                className="border-neutral-200 bg-neutral-50 text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400"
-                                                            >
-                                                                Selesai
-                                                            </Badge>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-right text-[13px] font-medium">
-                                                        {fmt(
-                                                            shift.starting_cash,
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-right text-[13px] font-medium">
-                                                        {fmt(sales)}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-right text-[13px] font-medium">
-                                                        {fmt(expected)}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-right text-[13px] font-medium">
-                                                        {fmt(shift.actual_cash)}
-                                                    </TableCell>
-                                                    <TableCell className="py-3 text-right">
-                                                        {diff != null ? (
-                                                            <span
-                                                                className={cn(
-                                                                    'inline-flex items-center gap-1 text-[13px] font-bold',
-                                                                    diff > 0 &&
-                                                                        'text-emerald-600 dark:text-emerald-400',
-                                                                    diff < 0 &&
-                                                                        'text-red-600 dark:text-red-400',
-                                                                    diff ===
-                                                                        0 &&
-                                                                        'text-neutral-500',
-                                                                )}
-                                                            >
-                                                                {diff > 0
-                                                                    ? '+'
-                                                                    : ''}
-                                                                {fmt(diff)}
-                                                                {diff > 0 && (
-                                                                    <TrendingUp className="size-3.5" />
-                                                                )}
-                                                                {diff < 0 && (
-                                                                    <TrendingDown className="size-3.5" />
-                                                                )}
-                                                                {diff === 0 && (
-                                                                    <CheckCircle2 className="size-3.5 text-emerald-500" />
-                                                                )}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-[13px] text-muted-foreground">
-                                                                —
-                                                            </span>
-                                                        )}
-                                                    </TableCell>
-                                                </motion.tr>
-                                            );
-                                        })
-                                    ) : (
-                                        <TableRow>
-                                            <TableCell
-                                                colSpan={9}
-                                                className="h-52 text-center"
-                                            >
-                                                <div className="flex flex-col items-center justify-center space-y-3">
-                                                    <Clock className="size-10 text-neutral-300 dark:text-neutral-700" />
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {searchQuery
-                                                            ? 'Tidak ada shift yang cocok dengan pencarian.'
-                                                            : 'Belum ada shift. Buka shift baru untuk memulai.'}
-                                                    </p>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </AnimatePresence>
-                            </TableBody>
-                        </Table>
-                    </CardContent>
+                                                    <div className="flex flex-col items-center justify-center space-y-3">
+                                                        <Clock className="size-10 text-neutral-300 dark:text-neutral-700" />
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {searchInput
+                                                                ? 'Tidak ada shift yang cocok dengan pencarian.'
+                                                                : 'Belum ada shift. Buka shift baru untuk memulai.'}
+                                                        </p>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </AnimatePresence>
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </div>
                 </Card>
 
                 {/* PAGINATION */}

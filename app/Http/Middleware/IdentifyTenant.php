@@ -21,6 +21,7 @@ class IdentifyTenant
         if ($tenant = $this->resolveTenant($request)) {
             app()->instance('current.tenant', $tenant);
             config()->set('permission.cache.key', 'spatie.permission.cache.'.$tenant->id);
+            $request->session()->put('tenant_id', $tenant->id);
         } else {
             config()->set('permission.cache.key', 'spatie.permission.cache');
         }
@@ -47,7 +48,8 @@ class IdentifyTenant
             }
         }
 
-        if ($slug = $request->query('tenant') ?: $request->cookie('tenant') ?: $request->header('X-Tenant')) {
+        // Hanya izinkan switching tenant via query param jika belum login (proses registrasi/login)
+        if ($slug = $request->query('tenant') ?: $request->cookie('tenant')) {
             return Tenant::where('slug', $slug)->first();
         }
 

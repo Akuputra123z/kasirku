@@ -1,3 +1,4 @@
+'use client';
 import { Head, useForm, router } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -10,9 +11,9 @@ import {
     Search,
     CheckCircle2,
     Tag,
-    XCircle,
+    X,
 } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
@@ -83,36 +84,35 @@ export default function Index({ categories, filters, flash }: Props) {
             description: '',
         });
 
-    const searchCategories = () => {
-        router.get(
-            '/categories',
-            { search: searchQuery || null },
-            { preserveState: true },
-        );
-    };
+    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const debouncedSearch = useCallback((value: string) => {
+        setSearchQuery(value);
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = setTimeout(() => {
+            router.get(
+                route('categories.index'),
+                { search: value || null },
+                { preserveState: true, replace: true },
+            );
+        }, 300);
+    }, []);
+
+    useEffect(
+        () => () => {
+            if (searchTimeoutRef.current)
+                clearTimeout(searchTimeoutRef.current);
+        },
+        [],
+    );
 
     const goToPage = (page: number) => {
         router.get(
-            '/categories',
+            route('categories.index'),
             { page, search: filters?.search || null },
             { preserveState: true },
         );
     };
-
-    const categoryList = useMemo(() => {
-        if (searchQuery && !filters?.search) {
-            return categories.data.filter(
-                (c) =>
-                    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    (c.description &&
-                        c.description
-                            .toLowerCase()
-                            .includes(searchQuery.toLowerCase())),
-            );
-        }
-
-        return categories.data;
-    }, [categories.data, searchQuery, filters?.search]);
 
     const openCreateDialog = () => {
         setEditingCategory(null);
@@ -135,7 +135,7 @@ export default function Index({ categories, filters, flash }: Props) {
         e.preventDefault();
 
         if (editingCategory) {
-            put(`/categories/${editingCategory.id}`, {
+            put(route('categories.update', editingCategory.id), {
                 onSuccess: () => {
                     setIsDialogOpen(false);
                     toast.success('Kategori berhasil diperbarui');
@@ -143,7 +143,7 @@ export default function Index({ categories, filters, flash }: Props) {
                 preserveScroll: true,
             });
         } else {
-            post('/categories', {
+            post(route('categories.store'), {
                 onSuccess: () => {
                     setIsDialogOpen(false);
                     reset();
@@ -159,7 +159,7 @@ export default function Index({ categories, filters, flash }: Props) {
             return;
         }
 
-        router.delete(`/categories/${deleteId}`, {
+        router.delete(route('categories.destroy', deleteId), {
             onSuccess: () => {
                 toast.success('Kategori berhasil dihapus');
                 setDeleteId(null);
@@ -171,35 +171,6 @@ export default function Index({ categories, filters, flash }: Props) {
     return (
         <div className="min-h-screen space-y-6 bg-neutral-50 p-4 font-sans md:p-8 dark:bg-neutral-950">
             <Head title="Kategori" />
-
-            <AnimatePresence>
-                {flash?.success && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50"
-                    >
-                        <CheckCircle2 className="size-5 shrink-0" />
-                        <span className="text-sm font-medium">
-                            {flash.success}
-                        </span>
-                    </motion.div>
-                )}
-                {flash?.error && (
-                    <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-800 dark:bg-red-950/50"
-                    >
-                        <XCircle className="size-5 shrink-0" />
-                        <span className="text-sm font-medium">
-                            {flash.error}
-                        </span>
-                    </motion.div>
-                )}
-            </AnimatePresence>
 
             <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
                 <div>
@@ -233,152 +204,152 @@ export default function Index({ categories, filters, flash }: Props) {
                     <Input
                         placeholder="Cari kategori..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyDown={(e) =>
-                            e.key === 'Enter' && searchCategories()
-                        }
-                        className="h-9 pl-9 text-[13px]"
+                        onChange={(e) => debouncedSearch(e.target.value)}
+                        className="h-9 pr-8 pl-9 text-[13px]"
                     />
+                    {searchQuery && (
+                        <button
+                            onClick={() => debouncedSearch('')}
+                            className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                            <X className="size-3.5" />
+                        </button>
+                    )}
                 </div>
-                <Button
-                    onClick={searchCategories}
-                    variant="secondary"
-                    className="h-9 px-3 text-[13px]"
-                >
-                    Cari
-                </Button>
             </div>
 
             <Card className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-none dark:border-neutral-800 dark:bg-neutral-950">
                 <CardContent className="p-0">
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="border-b border-neutral-100 hover:bg-transparent dark:border-neutral-900">
-                                <TableHead className="w-[100px] py-3 text-center text-[13px] font-semibold text-foreground">
-                                    Kode
-                                </TableHead>
-                                <TableHead className="py-3 text-[13px] font-semibold text-foreground">
-                                    Nama Kategori
-                                </TableHead>
-                                <TableHead className="py-3 text-[13px] font-semibold text-foreground">
-                                    Deskripsi
-                                </TableHead>
-                                <TableHead className="py-3 text-[13px] font-semibold text-foreground">
-                                    Status
-                                </TableHead>
-                                <TableHead className="py-3 pr-6 text-right text-[13px] font-semibold text-foreground">
-                                    Tanggal
-                                </TableHead>
-                                <TableHead className="w-[50px]"></TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <AnimatePresence mode="popLayout">
-                                {categoryList.length > 0 ? (
-                                    categoryList.map((category) => (
-                                        <motion.tr
-                                            key={category.id}
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
-                                            className="group border-b border-neutral-100 transition-colors hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/50"
-                                        >
-                                            <TableCell className="py-3 text-center text-[13px] font-medium text-muted-foreground">
-                                                CAT-
-                                                {category.id
-                                                    .toString()
-                                                    .padStart(4, '0')}
-                                            </TableCell>
-                                            <TableCell className="py-3">
-                                                <span className="text-[13px] font-semibold text-foreground">
-                                                    {category.name}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="py-3">
-                                                <span className="text-[13px] text-muted-foreground">
-                                                    {category.description ||
-                                                        '—'}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="py-3">
-                                                <div className="flex items-center gap-2">
-                                                    <CheckCircle2 className="size-3.5 text-blue-500" />
-                                                    <span className="text-[13px] font-medium">
-                                                        Aktif
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="border-b border-neutral-100 hover:bg-transparent dark:border-neutral-900">
+                                    <TableHead className="w-[100px] py-3 text-center text-[13px] font-semibold text-foreground">
+                                        Kode
+                                    </TableHead>
+                                    <TableHead className="py-3 text-[13px] font-semibold text-foreground">
+                                        Nama Kategori
+                                    </TableHead>
+                                    <TableHead className="py-3 text-[13px] font-semibold text-foreground">
+                                        Deskripsi
+                                    </TableHead>
+                                    <TableHead className="py-3 text-[13px] font-semibold text-foreground">
+                                        Status
+                                    </TableHead>
+                                    <TableHead className="py-3 pr-6 text-right text-[13px] font-semibold text-foreground">
+                                        Tanggal
+                                    </TableHead>
+                                    <TableHead className="w-[50px]"></TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                <AnimatePresence mode="popLayout">
+                                    {categories.data.length > 0 ? (
+                                        categories.data.map((category) => (
+                                            <motion.tr
+                                                key={category.id}
+                                                initial={{ opacity: 0 }}
+                                                animate={{ opacity: 1 }}
+                                                exit={{ opacity: 0 }}
+                                                className="group border-b border-neutral-100 transition-colors hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/50"
+                                            >
+                                                <TableCell className="py-3 text-center text-[13px] font-medium text-muted-foreground">
+                                                    CAT-
+                                                    {category.id
+                                                        .toString()
+                                                        .padStart(4, '0')}
+                                                </TableCell>
+                                                <TableCell className="py-3">
+                                                    <span className="text-[13px] font-semibold text-foreground">
+                                                        {category.name}
                                                     </span>
+                                                </TableCell>
+                                                <TableCell className="py-3">
+                                                    <span className="text-[13px] text-muted-foreground">
+                                                        {category.description ||
+                                                            '—'}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell className="py-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <CheckCircle2 className="size-3.5 text-blue-500" />
+                                                        <span className="text-[13px] font-medium">
+                                                            Aktif
+                                                        </span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="py-3 pr-6 text-right">
+                                                    <span className="text-[13px] text-muted-foreground">
+                                                        {new Date(
+                                                            category.created_at,
+                                                        ).toLocaleDateString(
+                                                            'id-ID',
+                                                        )}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell className="py-3 pr-4 text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger
+                                                            asChild
+                                                        >
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="size-8"
+                                                            >
+                                                                <MoreHorizontal className="size-4 text-muted-foreground" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuLabel className="px-3 text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
+                                                                Aksi
+                                                            </DropdownMenuLabel>
+                                                            <DropdownMenuItem
+                                                                onClick={() =>
+                                                                    openEditDialog(
+                                                                        category,
+                                                                    )
+                                                                }
+                                                                className="cursor-pointer gap-2"
+                                                            >
+                                                                Edit
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                onClick={() =>
+                                                                    setDeleteId(
+                                                                        category.id,
+                                                                    )
+                                                                }
+                                                                className="cursor-pointer gap-2 text-red-500 focus:text-red-500"
+                                                            >
+                                                                Hapus
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </TableCell>
+                                            </motion.tr>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell
+                                                colSpan={6}
+                                                className="h-64 text-center"
+                                            >
+                                                <div className="flex flex-col items-center justify-center space-y-3">
+                                                    <Tag className="size-10 text-neutral-300" />
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Tidak ada kategori
+                                                        ditemukan.
+                                                    </p>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="py-3 pr-6 text-right">
-                                                <span className="text-[13px] text-muted-foreground">
-                                                    {new Date(
-                                                        category.created_at,
-                                                    ).toLocaleDateString(
-                                                        'id-ID',
-                                                    )}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="py-3 pr-4 text-right">
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger
-                                                        asChild
-                                                    >
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="size-8"
-                                                        >
-                                                            <MoreHorizontal className="size-4 text-muted-foreground" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuLabel className="px-3 text-[11px] font-bold tracking-widest text-muted-foreground uppercase">
-                                                            Aksi
-                                                        </DropdownMenuLabel>
-                                                        <DropdownMenuItem
-                                                            onClick={() =>
-                                                                openEditDialog(
-                                                                    category,
-                                                                )
-                                                            }
-                                                            className="cursor-pointer gap-2"
-                                                        >
-                                                            Edit
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuItem
-                                                            onClick={() =>
-                                                                setDeleteId(
-                                                                    category.id,
-                                                                )
-                                                            }
-                                                            className="cursor-pointer gap-2 text-red-500 focus:text-red-500"
-                                                        >
-                                                            Hapus
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </TableCell>
-                                        </motion.tr>
-                                    ))
-                                ) : (
-                                    <TableRow>
-                                        <TableCell
-                                            colSpan={6}
-                                            className="h-64 text-center"
-                                        >
-                                            <div className="flex flex-col items-center justify-center space-y-3">
-                                                <Tag className="size-10 text-neutral-300" />
-                                                <p className="text-sm text-muted-foreground">
-                                                    Tidak ada kategori
-                                                    ditemukan.
-                                                </p>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </AnimatePresence>
-                        </TableBody>
-                    </Table>
+                                        </TableRow>
+                                    )}
+                                </AnimatePresence>
+                            </TableBody>
+                        </Table>
+                    </div>
                 </CardContent>
             </Card>
 
@@ -440,7 +411,7 @@ export default function Index({ categories, filters, flash }: Props) {
             )}
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[425px]">
                     <form onSubmit={handleSubmit}>
                         <DialogHeader>
                             <DialogTitle>
@@ -525,8 +496,8 @@ export default function Index({ categories, filters, flash }: Props) {
                 onOpenChange={setIsImportOpen}
                 title="Import Kategori"
                 description="Upload file CSV untuk menambahkan banyak kategori sekaligus."
-                route="/categories/import"
-                templateUrl="/categories/import/template"
+                route={route('categories.import')}
+                templateUrl={route('categories.import.template')}
             />
 
             <Dialog
@@ -537,7 +508,7 @@ export default function Index({ categories, filters, flash }: Props) {
                     }
                 }}
             >
-                <DialogContent className="sm:max-w-sm">
+                <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-sm">
                     <DialogHeader>
                         <DialogTitle>Hapus Kategori</DialogTitle>
                     </DialogHeader>

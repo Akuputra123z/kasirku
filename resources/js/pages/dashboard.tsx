@@ -34,11 +34,11 @@ interface Props {
         totalSales: number;
         weeklySales: number;
         totalOrders: number;
-        earningsGrowth: number;
-        weeklyGrowth: number;
-        salesGrowth: number;
-        ordersGrowth: number;
-        yearlyGrowth: number;
+        earningsGrowth: number | null;
+        weeklyGrowth: number | null;
+        salesGrowth: number | null;
+        ordersGrowth: number | null;
+        yearlyGrowth: number | null;
     };
     monthlyChart: {
         month: string;
@@ -119,7 +119,7 @@ export default function Dashboard({
                     <Suspense fallback={<ChartSkeleton />}>
                         <SalesOverviewChart
                             chartData={monthlyChart}
-                            yearlyGrowth={stats.yearlyGrowth}
+                            yearlyGrowth={stats.yearlyGrowth ?? undefined}
                         />
                     </Suspense>
 

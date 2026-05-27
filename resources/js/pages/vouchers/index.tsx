@@ -1,22 +1,21 @@
+'use client';
 import { Head, router, usePage } from '@inertiajs/react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
     Plus,
     Search,
     Pencil,
     Trash2,
-    CheckCircle2,
-    XCircle,
     Tag,
     ChevronsLeft,
     ChevronLeft,
     ChevronRight,
     ChevronsRight,
-    Calendar,
     Percent,
     Coins,
+    X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,6 +36,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
 import vouchers from '@/routes/vouchers';
 
 interface Voucher {
@@ -66,7 +73,6 @@ interface Paginator<T> {
 interface PageProps extends Record<string, unknown> {
     vouchers: Paginator<Voucher>;
     filters: { search: string | null };
-    flash?: { success?: string; error?: string };
 }
 
 const fmt = (v: number) =>
@@ -85,7 +91,7 @@ const fmtDate = (s: string | null) =>
         : '—';
 
 export default function VouchersIndex() {
-    const { vouchers: data, filters, flash } = usePage<PageProps>().props;
+    const { vouchers: data, filters } = usePage<PageProps>().props;
 
     const [search, setSearch] = useState(filters.search ?? '');
     const [showForm, setShowForm] = useState(false);
@@ -105,9 +111,32 @@ export default function VouchersIndex() {
     });
     const [loading, setLoading] = useState(false);
 
-    const searchVoucher = () => {
-        router.get(vouchers.index().url, { search }, { preserveState: true });
-    };
+    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const debouncedSearch = useCallback((value: string) => {
+        setSearch(value);
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
+        searchTimeoutRef.current = setTimeout(() => {
+            router.get(
+                vouchers.index().url,
+                { search: value || null, page: 1 },
+                { preserveState: true },
+            );
+        }, 300);
+    }, []);
+
+    useEffect(
+        () => () => {
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+        },
+        [],
+    );
 
     const openCreate = () => {
         setEditing(null);
@@ -162,6 +191,8 @@ export default function VouchersIndex() {
                 payload,
                 {
                     preserveScroll: true,
+                    onSuccess: () =>
+                        toast.success('Voucher berhasil diperbarui.'),
                     onFinish: () => {
                         setLoading(false);
                         setShowForm(false);
@@ -172,6 +203,7 @@ export default function VouchersIndex() {
         } else {
             router.post(vouchers.store().url, payload, {
                 preserveScroll: true,
+                onSuccess: () => toast.success('Voucher berhasil ditambahkan.'),
                 onFinish: () => {
                     setLoading(false);
                     setShowForm(false);
@@ -187,6 +219,7 @@ export default function VouchersIndex() {
 
         router.delete(vouchers.destroy({ voucher: deleteId }).url, {
             preserveScroll: true,
+            onSuccess: () => toast.success('Voucher berhasil dihapus.'),
             onFinish: () => setDeleteId(null),
         });
     };
@@ -212,237 +245,207 @@ export default function VouchersIndex() {
                     </Button>
                 </div>
 
-                <AnimatePresence>
-                    {flash?.success && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50"
+                <div className="relative max-w-sm">
+                    <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        placeholder="Cari kode atau nama voucher..."
+                        value={search}
+                        onChange={(e) => debouncedSearch(e.target.value)}
+                        className="h-9 w-full pr-8 pl-9 text-[13px]"
+                    />
+                    {search && (
+                        <button
+                            onClick={() => debouncedSearch('')}
+                            className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         >
-                            <CheckCircle2 className="size-5 shrink-0" />
-                            <span className="text-sm font-medium">
-                                {flash.success}
-                            </span>
-                        </motion.div>
+                            <X className="size-3.5" />
+                        </button>
                     )}
-                    {flash?.error && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700 dark:border-red-800 dark:bg-red-950/50"
-                        >
-                            <XCircle className="size-5 shrink-0" />
-                            <span className="text-sm font-medium">
-                                {flash.error}
-                            </span>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                <div className="flex gap-2">
-                    <div className="relative flex-1 md:w-72">
-                        <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            placeholder="Cari kode atau nama voucher..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            onKeyDown={(e) =>
-                                e.key === 'Enter' && searchVoucher()
-                            }
-                            className="h-9 pl-9 text-[13px]"
-                        />
-                    </div>
-                    <Button
-                        onClick={searchVoucher}
-                        variant="secondary"
-                        className="h-9 px-3 text-[13px]"
-                    >
-                        Cari
-                    </Button>
                 </div>
 
                 <Card className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-none dark:border-neutral-800 dark:bg-neutral-950">
                     <CardContent className="p-0">
-                        <table className="w-full text-[13px]">
-                            <thead>
-                                <tr className="border-b border-neutral-100 dark:border-neutral-900">
-                                    <th className="px-4 py-3 text-left text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Kode
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Nama
-                                    </th>
-                                    <th className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Tipe
-                                    </th>
-                                    <th className="px-4 py-3 text-right text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Nilai
-                                    </th>
-                                    <th className="px-4 py-3 text-right text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Min Order
-                                    </th>
-                                    <th className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Pemakaian
-                                    </th>
-                                    <th className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Masa Berlaku
-                                    </th>
-                                    <th className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Status
-                                    </th>
-                                    <th className="px-4 py-3 text-right text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                                        Aksi
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {data.data.length > 0 ? (
-                                    data.data.map((v) => {
-                                        const isExpired =
-                                            v.valid_until &&
-                                            new Date(v.valid_until) <
-                                                new Date();
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="border-b border-neutral-100 hover:bg-transparent dark:border-neutral-900">
+                                        <TableHead className="px-4 py-3 text-left text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Kode
+                                        </TableHead>
+                                        <TableHead className="px-4 py-3 text-left text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Nama
+                                        </TableHead>
+                                        <TableHead className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Tipe
+                                        </TableHead>
+                                        <TableHead className="px-4 py-3 text-right text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Nilai
+                                        </TableHead>
+                                        <TableHead className="px-4 py-3 text-right text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Min Order
+                                        </TableHead>
+                                        <TableHead className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Pemakaian
+                                        </TableHead>
+                                        <TableHead className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Masa Berlaku
+                                        </TableHead>
+                                        <TableHead className="px-4 py-3 text-center text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Status
+                                        </TableHead>
+                                        <TableHead className="px-4 py-3 text-right text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                                            Aksi
+                                        </TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {data.data.length > 0 ? (
+                                        data.data.map((v) => {
+                                            const isExpired =
+                                                v.valid_until &&
+                                                new Date(v.valid_until) <
+                                                    new Date();
 
-                                        return (
-                                            <tr
-                                                key={v.id}
-                                                className="border-b border-neutral-100 transition-colors hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/50"
-                                            >
-                                                <td className="px-4 py-3">
-                                                    <span className="font-mono font-bold text-[#2d5a4e]">
-                                                        {v.code}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 font-semibold">
-                                                    {v.name}
-                                                </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    {v.type === 'percentage' ? (
-                                                        <Badge className="rounded-md border-blue-200 bg-blue-50 text-[11px] text-blue-700 shadow-none dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-400">
-                                                            <Percent className="mr-1 size-3" />
-                                                            Persen
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge className="rounded-md border-amber-200 bg-amber-50 text-[11px] text-amber-700 shadow-none dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400">
-                                                            <Coins className="mr-1 size-3" />
-                                                            Nominal
-                                                        </Badge>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-right font-bold">
-                                                    {v.type === 'percentage'
-                                                        ? `${v.value}%`
-                                                        : fmt(v.value)}
-                                                </td>
-                                                <td className="px-4 py-3 text-right text-muted-foreground">
-                                                    {v.min_order_amount > 0
-                                                        ? fmt(
-                                                              v.min_order_amount,
-                                                          )
-                                                        : '—'}
-                                                </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <span
-                                                        className={
-                                                            v.max_uses &&
-                                                            v.used_count >=
-                                                                v.max_uses
-                                                                ? 'font-bold text-red-600'
-                                                                : ''
-                                                        }
-                                                    >
-                                                        {v.used_count}
-                                                        {v.max_uses
-                                                            ? `/${v.max_uses}`
-                                                            : ''}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <div className="flex flex-col text-[11px]">
-                                                        {v.valid_from ? (
-                                                            <span>
-                                                                {fmtDate(
-                                                                    v.valid_from,
-                                                                )}
-                                                            </span>
+                                            return (
+                                                <TableRow
+                                                    key={v.id}
+                                                    className="border-b border-neutral-100 transition-colors hover:bg-neutral-50 dark:border-neutral-900 dark:hover:bg-neutral-900/50"
+                                                >
+                                                    <TableCell className="px-4 py-3">
+                                                        <span className="font-mono font-bold text-[#2d5a4e]">
+                                                            {v.code}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell className="px-4 py-3 font-semibold">
+                                                        {v.name}
+                                                    </TableCell>
+                                                    <TableCell className="px-4 py-3 text-center">
+                                                        {v.type ===
+                                                        'percentage' ? (
+                                                            <Badge className="rounded-md border-blue-200 bg-blue-50 text-[11px] text-blue-700 shadow-none dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-400">
+                                                                <Percent className="mr-1 size-3" />
+                                                                Persen
+                                                            </Badge>
                                                         ) : (
-                                                            <span className="text-muted-foreground">
-                                                                —
-                                                            </span>
+                                                            <Badge className="rounded-md border-amber-200 bg-amber-50 text-[11px] text-amber-700 shadow-none dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-400">
+                                                                <Coins className="mr-1 size-3" />
+                                                                Nominal
+                                                            </Badge>
                                                         )}
-                                                        {v.valid_until && (
-                                                            <span className="text-muted-foreground">
-                                                                →{' '}
-                                                                {fmtDate(
-                                                                    v.valid_until,
-                                                                )}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    {!v.is_active ? (
-                                                        <Badge className="rounded-md border-none bg-neutral-100 text-[11px] text-neutral-500 shadow-none">
-                                                            Nonaktif
-                                                        </Badge>
-                                                    ) : isExpired ? (
-                                                        <Badge className="rounded-md border-none bg-red-50 text-[11px] text-red-600 shadow-none">
-                                                            Kadaluarsa
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge className="rounded-md border-none bg-emerald-50 text-[11px] text-emerald-600 shadow-none">
-                                                            Aktif
-                                                        </Badge>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-3 text-right">
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="size-8"
-                                                            onClick={() =>
-                                                                openEdit(v)
+                                                    </TableCell>
+                                                    <TableCell className="px-4 py-3 text-right font-bold">
+                                                        {v.type === 'percentage'
+                                                            ? `${v.value}%`
+                                                            : fmt(v.value)}
+                                                    </TableCell>
+                                                    <TableCell className="px-4 py-3 text-right text-muted-foreground">
+                                                        {v.min_order_amount > 0
+                                                            ? fmt(
+                                                                  v.min_order_amount,
+                                                              )
+                                                            : '—'}
+                                                    </TableCell>
+                                                    <TableCell className="px-4 py-3 text-center">
+                                                        <span
+                                                            className={
+                                                                v.max_uses &&
+                                                                v.used_count >=
+                                                                    v.max_uses
+                                                                    ? 'font-bold text-red-600'
+                                                                    : ''
                                                             }
                                                         >
-                                                            <Pencil className="size-3.5" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="size-8 text-red-500 hover:text-red-700"
-                                                            onClick={() =>
-                                                                setDeleteId(
-                                                                    v.id,
-                                                                )
-                                                            }
-                                                        >
-                                                            <Trash2 className="size-3.5" />
-                                                        </Button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                ) : (
-                                    <tr>
-                                        <td
-                                            colSpan={9}
-                                            className="h-40 text-center text-muted-foreground"
-                                        >
-                                            <div className="flex flex-col items-center gap-2">
-                                                <Tag className="size-8 text-neutral-300" />
-                                                <p className="text-sm">
-                                                    Belum ada voucher.
-                                                </p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                                            {v.used_count}
+                                                            {v.max_uses
+                                                                ? `/${v.max_uses}`
+                                                                : ''}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell className="px-4 py-3 text-center">
+                                                        <div className="flex flex-col text-[11px]">
+                                                            {v.valid_from ? (
+                                                                <span>
+                                                                    {fmtDate(
+                                                                        v.valid_from,
+                                                                    )}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-muted-foreground">
+                                                                    —
+                                                                </span>
+                                                            )}
+                                                            {v.valid_until && (
+                                                                <span className="text-muted-foreground">
+                                                                    →{' '}
+                                                                    {fmtDate(
+                                                                        v.valid_until,
+                                                                    )}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="px-4 py-3 text-center">
+                                                        {!v.is_active ? (
+                                                            <Badge className="rounded-md border-none bg-neutral-100 text-[11px] text-neutral-500 shadow-none">
+                                                                Nonaktif
+                                                            </Badge>
+                                                        ) : isExpired ? (
+                                                            <Badge className="rounded-md border-none bg-red-50 text-[11px] text-red-600 shadow-none">
+                                                                Kadaluarsa
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge className="rounded-md border-none bg-emerald-50 text-[11px] text-emerald-600 shadow-none">
+                                                                Aktif
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="px-4 py-3 text-right">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="size-8"
+                                                                onClick={() =>
+                                                                    openEdit(v)
+                                                                }
+                                                            >
+                                                                <Pencil className="size-3.5" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="size-8 text-red-500 hover:text-red-700"
+                                                                onClick={() =>
+                                                                    setDeleteId(
+                                                                        v.id,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Trash2 className="size-3.5" />
+                                                            </Button>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell
+                                                colSpan={9}
+                                                className="h-40 text-center text-muted-foreground"
+                                            >
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <Tag className="size-8 text-neutral-300" />
+                                                    <p className="text-sm">
+                                                        Belum ada voucher.
+                                                    </p>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
                     </CardContent>
                 </Card>
 
@@ -529,7 +532,7 @@ export default function VouchersIndex() {
                     }
                 }}
             >
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle>
                             {editing ? 'Edit Voucher' : 'Tambah Voucher'}
@@ -766,7 +769,7 @@ export default function VouchersIndex() {
                     }
                 }}
             >
-                <DialogContent className="sm:max-w-sm">
+                <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-sm">
                     <DialogHeader>
                         <DialogTitle>Hapus Voucher</DialogTitle>
                     </DialogHeader>

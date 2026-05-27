@@ -14,8 +14,6 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
@@ -189,7 +187,7 @@ class ReportExport implements WithMultipleSheets
             ->values();
 
         return [
-            'Ringkasan' => new class($summary, $startDate, $endDate, $paymentMethods, $orderTypes) implements FromArray, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
+            'Ringkasan' => new class($summary, $startDate, $endDate, $paymentMethods, $orderTypes) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
             {
                 public function __construct(
                     protected $summary,
@@ -199,7 +197,10 @@ class ReportExport implements WithMultipleSheets
                     protected $orderTypes,
                 ) {}
 
-                public function title(): string { return 'Ringkasan'; }
+                public function title(): string
+                {
+                    return 'Ringkasan';
+                }
 
                 public function headings(): array
                 {
@@ -250,11 +251,14 @@ class ReportExport implements WithMultipleSheets
                     return $rows;
                 }
             },
-            'Laporan Harian' => new class($dailyReport) implements FromArray, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
+            'Laporan Harian' => new class($dailyReport) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
             {
                 public function __construct(protected $dailyReport) {}
 
-                public function title(): string { return 'Laporan Harian'; }
+                public function title(): string
+                {
+                    return 'Laporan Harian';
+                }
 
                 public function headings(): array
                 {
@@ -276,11 +280,14 @@ class ReportExport implements WithMultipleSheets
                     ])->toArray();
                 }
             },
-            'Per Metode Pembayaran' => new class($paymentMethods) implements FromArray, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
+            'Per Metode Pembayaran' => new class($paymentMethods) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
             {
                 public function __construct(protected $paymentMethods) {}
 
-                public function title(): string { return 'Per Metode Bayar'; }
+                public function title(): string
+                {
+                    return 'Per Metode Bayar';
+                }
 
                 public function headings(): array
                 {
@@ -301,7 +308,7 @@ class ReportExport implements WithMultipleSheets
                     ])->toArray();
                 }
             },
-            'Per Tipe Pesanan' => new class($orderTypes, $startDate, $endDate) implements FromArray, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
+            'Per Tipe Pesanan' => new class($orderTypes, $startDate, $endDate) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
             {
                 public function __construct(
                     protected $orderTypes,
@@ -309,7 +316,10 @@ class ReportExport implements WithMultipleSheets
                     protected string $endDate,
                 ) {}
 
-                public function title(): string { return 'Per Tipe Pesanan'; }
+                public function title(): string
+                {
+                    return 'Per Tipe Pesanan';
+                }
 
                 public function headings(): array
                 {
@@ -350,11 +360,14 @@ class ReportExport implements WithMultipleSheets
                     return $rows;
                 }
             },
-            'Per Kategori' => new class($categories) implements FromArray, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
+            'Per Kategori' => new class($categories) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
             {
                 public function __construct(protected $categories) {}
 
-                public function title(): string { return 'Per Kategori'; }
+                public function title(): string
+                {
+                    return 'Per Kategori';
+                }
 
                 public function headings(): array
                 {
@@ -376,11 +389,14 @@ class ReportExport implements WithMultipleSheets
                     ])->toArray();
                 }
             },
-            'Produk Terlaris' => new class($topProducts) implements FromArray, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
+            'Produk Terlaris' => new class($topProducts) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
             {
                 public function __construct(protected $topProducts) {}
 
-                public function title(): string { return 'Produk Terlaris'; }
+                public function title(): string
+                {
+                    return 'Produk Terlaris';
+                }
 
                 public function headings(): array
                 {
@@ -402,11 +418,14 @@ class ReportExport implements WithMultipleSheets
                     ])->toArray();
                 }
             },
-            'Detail Item Terjual' => new class($lineItems) implements FromArray, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
+            'Detail Item Terjual' => new class($lineItems) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
             {
                 public function __construct(protected $lineItems) {}
 
-                public function title(): string { return 'Detail Item Terjual'; }
+                public function title(): string
+                {
+                    return 'Detail Item Terjual';
+                }
 
                 public function headings(): array
                 {
@@ -437,11 +456,14 @@ class ReportExport implements WithMultipleSheets
                     ])->toArray();
                 }
             },
-            'Detail Transaksi' => new class($transactions) implements FromArray, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
+            'Detail Transaksi' => new class($transactions) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
             {
                 public function __construct(protected $transactions) {}
 
-                public function title(): string { return 'Detail Transaksi'; }
+                public function title(): string
+                {
+                    return 'Detail Transaksi';
+                }
 
                 public function headings(): array
                 {
@@ -481,11 +503,14 @@ class ReportExport implements WithMultipleSheets
                     ])->toArray();
                 }
             },
-            'Shift Kasir' => new class($shiftReports) implements FromArray, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
+            'Shift Kasir' => new class($shiftReports) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
             {
                 public function __construct(protected $shiftReports) {}
 
-                public function title(): string { return 'Shift Kasir'; }
+                public function title(): string
+                {
+                    return 'Shift Kasir';
+                }
 
                 public function headings(): array
                 {
@@ -522,11 +547,14 @@ class ReportExport implements WithMultipleSheets
                     })->toArray();
                 }
             },
-            'Pelanggan' => new class($customers) implements FromArray, WithHeadings, WithTitle, ShouldAutoSize, WithStyles
+            'Pelanggan' => new class($customers) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
             {
                 public function __construct(protected $customers) {}
 
-                public function title(): string { return 'Pelanggan'; }
+                public function title(): string
+                {
+                    return 'Pelanggan';
+                }
 
                 public function headings(): array
                 {

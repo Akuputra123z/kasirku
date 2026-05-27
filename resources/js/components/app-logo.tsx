@@ -10,7 +10,9 @@ export default function AppLogo({ storeName }: { storeName?: string }) {
         <div className="flex min-w-0 items-center gap-3">
             <AppLogoIcon className="size-10 shrink-0" />
             {name && (
-                <span className="truncate text-sm font-semibold group-data-[state=collapsed]:hidden"></span>
+                <span className="truncate text-sm font-semibold group-data-[state=collapsed]:hidden">
+                    {name}
+                </span>
             )}
         </div>
     );

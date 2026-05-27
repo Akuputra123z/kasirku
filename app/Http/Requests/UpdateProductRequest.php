@@ -12,6 +12,13 @@ class UpdateProductRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->brand_id === '' || $this->brand_id === 'null' || $this->brand_id === 'none') {
+            $this->merge(['brand_id' => null]);
+        }
+    }
+
     public function rules(): array
     {
         return [
@@ -20,6 +27,7 @@ class UpdateProductRequest extends FormRequest
             'price' => ['required', 'numeric', 'min:0'],
             'stock' => ['required', 'integer', 'min:0'],
             'category_id' => ['required', 'exists:categories,id'],
+            'brand_id' => ['nullable', 'exists:brands,id'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'variants' => ['nullable', 'array'],

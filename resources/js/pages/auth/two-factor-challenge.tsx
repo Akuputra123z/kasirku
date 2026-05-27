@@ -1,6 +1,6 @@
 import { Form, Head, setLayoutProps } from '@inertiajs/react';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,10 +38,12 @@ export default function TwoFactorChallenge() {
         };
     }, [showRecoveryInput]);
 
-    setLayoutProps({
-        title: authConfigContent.title,
-        description: authConfigContent.description,
-    });
+    useEffect(() => {
+        setLayoutProps({
+            title: authConfigContent.title,
+            description: authConfigContent.description,
+        });
+    }, [authConfigContent]);
 
     const toggleRecoveryMode = (clearErrors: () => void): void => {
         setShowRecoveryInput(!showRecoveryInput);

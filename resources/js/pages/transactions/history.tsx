@@ -5,11 +5,9 @@ import {
     DollarSign,
     ShoppingCart,
     BarChart3,
-    Receipt,
     Search,
     Eye,
     Printer,
-    MoreHorizontal,
     ChevronLeft,
     ChevronRight,
     Clock,
@@ -302,7 +300,7 @@ export default function History({ transactions, summary }: Props) {
                                         </TableCell>
                                         <TableCell className="px-4 py-3.5">
                                             <span className="text-[13px] font-medium">
-                                                {t.user.name}
+                                                {t.user?.name ?? 'Admin'}
                                             </span>
                                         </TableCell>
                                         <TableCell className="px-4 py-3.5">

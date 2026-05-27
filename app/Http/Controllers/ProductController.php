@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\ProductTemplateExport;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Http\Request;
@@ -22,13 +23,27 @@ class ProductController extends Controller
     /**
      * Menampilkan daftar produk dengan relasi kategori.
      */
-    public function index(): Response
+    public function index(Request $request): Response
     {
         Gate::authorize('manage-products');
 
+        $search = $request->get('search');
+
+        $products = Product::with(['category', 'brand', 'variants'])
+            ->when($search, fn ($q, $s) => $q->where('name', 'like', "%{$s}%")
+                ->orWhere('description', 'like', "%{$s}%")
+                ->orWhereHas('category', fn ($cq) => $cq->where('name', 'like', "%{$s}%"))
+                ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', "%{$s}%"))
+            )
+            ->latest()
+            ->paginate(10)
+            ->withQueryString();
+
         return Inertia::render('products/index', [
-            'products' => Product::with(['category', 'variants'])->latest()->paginate(10),
+            'products' => $products,
             'categories' => Category::select('id', 'name')->get(),
+            'brands' => Brand::select('id', 'name')->get(),
+            'filters' => ['search' => $search],
         ]);
     }
 
@@ -68,6 +83,8 @@ class ProductController extends Controller
                 Storage::disk('public')->delete($product->image);
             }
             $validated['image'] = $request->file('image')->store('products', 'public');
+        } else {
+            unset($validated['image']);
         }
 
         $product->update($validated);
@@ -147,7 +164,7 @@ class ProductController extends Controller
     {
         Gate::authorize('manage-products');
 
-        $product->load(['category', 'variants']);
+        $product->load(['category', 'brand', 'variants']);
 
         return Inertia::render('products/show', [
             'product' => $product,
@@ -217,6 +234,17 @@ class ProductController extends Controller
                 }
             }
 
+            $brand = null;
+            if (! blank($rowData['brand'] ?? null)) {
+                $brand = Brand::where('name', $rowData['brand'])->first();
+
+                if ($brand === null) {
+                    $errors[] = "Baris {$rowNumber}: Brand '{$rowData['brand']}' tidak ditemukan.";
+
+                    continue;
+                }
+            }
+
             $status = ! blank($rowData['status'] ?? null) ? strtolower($rowData['status']) : 'active';
 
             if (! in_array($status, ['active', 'inactive'])) {
@@ -231,6 +259,7 @@ class ProductController extends Controller
                 'price' => (float) $rowData['price'],
                 'stock' => (int) ($rowData['stock'] ?? 0),
                 'category_id' => $category?->id,
+                'brand_id' => $brand?->id,
                 'status' => $status,
             ]);
 

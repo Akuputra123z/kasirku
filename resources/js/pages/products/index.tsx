@@ -8,6 +8,7 @@ import {
     MoreHorizontal,
     Plus,
     Search,
+    X,
     CheckCircle2,
     Package,
     ArrowLeft,
@@ -17,7 +18,7 @@ import {
     ChevronsRight,
     Trash2,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
@@ -93,22 +94,24 @@ interface Paginator<T> {
 interface Props {
     products: Paginator<Product>;
     categories: Category[];
+    filters: { search?: string };
 }
 
-export default function Index({ products, categories }: Props) {
+export default function Index({ products, categories, filters }: Props) {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState(filters?.search ?? '');
     const [categorySearch, setCategorySearch] = useState('');
-    const [rowSelection, setRowSelection] = useState({});
+    const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
     const [confirmDialog, setConfirmDialog] = useState<{
         open: boolean;
         action: 'delete' | 'bulk-delete';
         productId?: number;
         loading: boolean;
     }>({ open: false, action: 'delete', loading: false });
+    const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
     const categorySearchRef = useRef<HTMLInputElement>(null);
     const filteredCategories = categories.filter((c) =>
@@ -297,6 +300,26 @@ export default function Index({ products, categories }: Props) {
         }
     };
 
+    useEffect(
+        () => () => {
+            if (searchTimeoutRef.current)
+                clearTimeout(searchTimeoutRef.current);
+        },
+        [],
+    );
+
+    const debouncedSearch = useCallback((value: string) => {
+        setSearchQuery(value);
+        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = setTimeout(() => {
+            router.get(
+                '/products',
+                { search: value || null },
+                { preserveState: true, replace: true },
+            );
+        }, 300);
+    }, []);
+
     const goToPage = (page: number) => {
         router.get(
             '/products',
@@ -304,10 +327,6 @@ export default function Index({ products, categories }: Props) {
             { preserveState: true },
         );
     };
-
-    const filteredProducts = products.data.filter((p) =>
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
 
     const columns: ColumnDef<Product>[] = [
         {
@@ -318,14 +337,14 @@ export default function Index({ products, categories }: Props) {
                     onCheckedChange={(value) =>
                         table.toggleAllPageRowsSelected(!!value)
                     }
-                    aria-label="Select all"
+                    aria-label="Pilih semua"
                 />
             ),
             cell: ({ row }) => (
                 <Checkbox
                     checked={row.getIsSelected()}
                     onCheckedChange={(value) => row.toggleSelected(!!value)}
-                    aria-label="Select row"
+                    aria-label="Pilih baris"
                 />
             ),
             enableSorting: false,
@@ -333,7 +352,7 @@ export default function Index({ products, categories }: Props) {
         },
         {
             accessorKey: 'name',
-            header: 'Product',
+            header: 'Produk',
             cell: ({ row }) => {
                 const product = row.original;
 
@@ -367,7 +386,7 @@ export default function Index({ products, categories }: Props) {
                                             variant="secondary"
                                             className="h-3.5 px-1 text-[8px] font-black tracking-tighter uppercase"
                                         >
-                                            {product.variants.length} Variants
+                                            {product.variants.length} Varian
                                         </Badge>
                                     )}
                             </div>
@@ -378,19 +397,19 @@ export default function Index({ products, categories }: Props) {
         },
         {
             accessorKey: 'category.name',
-            header: 'Category',
+            header: 'Kategori',
             cell: ({ row }) => (
                 <Badge
                     variant="outline"
                     className="rounded-md border-neutral-200 bg-neutral-100 px-2 py-0.5 text-[10px] font-bold uppercase dark:border-neutral-700 dark:bg-neutral-800"
                 >
-                    {row.original.category?.name || 'No Category'}
+                    {row.original.category?.name || 'Tidak Ada Kategori'}
                 </Badge>
             ),
         },
         {
             accessorKey: 'price',
-            header: 'Price',
+            header: 'Harga',
             cell: ({ row }) => (
                 <span className="text-[13px] font-bold">
                     Rp{' '}
@@ -400,7 +419,7 @@ export default function Index({ products, categories }: Props) {
         },
         {
             accessorKey: 'stock',
-            header: 'Stock',
+            header: 'Stok',
             cell: ({ row }) => {
                 const stock = row.original.stock;
 
@@ -410,7 +429,7 @@ export default function Index({ products, categories }: Props) {
                             className={`size-1.5 rounded-full ${stock > 10 ? 'bg-green-500' : 'bg-orange-500'}`}
                         />
                         <span className="text-[13px] font-medium">
-                            {stock} units
+                            {stock} unit
                         </span>
                     </div>
                 );
@@ -452,7 +471,7 @@ export default function Index({ products, categories }: Props) {
                                 className="w-44 rounded-xl border-neutral-200 p-1 shadow-xl dark:border-neutral-800"
                             >
                                 <DropdownMenuLabel className="px-2 py-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-                                    Manage
+                                    Kelola
                                 </DropdownMenuLabel>
                                 <DropdownMenuItem
                                     onClick={() =>
@@ -467,7 +486,7 @@ export default function Index({ products, categories }: Props) {
                                         width={16}
                                         className="text-neutral-500"
                                     />{' '}
-                                    View Details
+                                    Lihat Detail
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                     onClick={() => openEditDialog(product)}
@@ -478,7 +497,7 @@ export default function Index({ products, categories }: Props) {
                                         width={16}
                                         className="text-blue-500"
                                     />{' '}
-                                    Edit Product
+                                    Edit Produk
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -489,7 +508,7 @@ export default function Index({ products, categories }: Props) {
                                         icon="solar:trash-bin-trash-bold-duotone"
                                         width={16}
                                     />{' '}
-                                    Delete Product
+                                    Hapus Produk
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -501,15 +520,15 @@ export default function Index({ products, categories }: Props) {
 
     return (
         <div className="font-geist min-h-screen space-y-6 bg-white p-4 text-neutral-900 md:p-8 dark:bg-neutral-950 dark:text-white">
-            <Head title="Products" />
+            <Head title="Produk" />
 
             <div className="flex flex-col justify-between gap-4 px-2 md:flex-row md:items-start">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">
-                        Products Catalog
+                        Katalog Produk
                     </h1>
                     <p className="mt-0.5 text-[13px] text-muted-foreground">
-                        Manage your inventory and product variants.
+                        Kelola inventaris dan varian produk.
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -526,7 +545,7 @@ export default function Index({ products, categories }: Props) {
                         size="sm"
                         className="flex h-9 items-center gap-2 rounded-lg bg-black px-3 font-medium text-white shadow-lg hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
                     >
-                        Create <Plus className="size-3.5" />
+                        Buat <Plus className="size-3.5" />
                     </Button>
                 </div>
             </div>
@@ -535,11 +554,19 @@ export default function Index({ products, categories }: Props) {
                 <div className="relative w-full md:w-64">
                     <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                        placeholder="Search products..."
+                        placeholder="Cari produk..."
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="h-9 rounded-lg border-neutral-200 bg-transparent pl-9 text-[13px] dark:border-neutral-800"
+                        onChange={(e) => debouncedSearch(e.target.value)}
+                        className="h-9 rounded-lg border-neutral-200 bg-transparent pr-8 pl-9 text-[13px] dark:border-neutral-800"
                     />
+                    {searchQuery && (
+                        <button
+                            onClick={() => debouncedSearch('')}
+                            className="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                            <X className="size-3.5" />
+                        </button>
+                    )}
                 </div>
                 <div className="flex items-center gap-3">
                     {selectedIds.length > 0 && (
@@ -550,18 +577,18 @@ export default function Index({ products, categories }: Props) {
                             className="flex h-9 items-center gap-2 rounded-lg border-red-200 px-3 font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
                         >
                             <Trash2 className="size-3.5" />
-                            Delete ({selectedIds.length})
+                            Hapus ({selectedIds.length})
                         </Button>
                     )}
                     <span className="text-[13px] text-muted-foreground">
-                        {products.total} products
+                        {products.total} produk
                     </span>
                 </div>
             </div>
 
             <DataTable
                 columns={columns}
-                data={filteredProducts}
+                data={products.data}
                 rowSelection={rowSelection}
                 onRowSelectionChange={setRowSelection}
             />
@@ -634,13 +661,13 @@ export default function Index({ products, categories }: Props) {
                                         <div>
                                             <DialogTitle className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">
                                                 {editingProduct
-                                                    ? 'Edit Product'
-                                                    : 'Add New Product'}
+                                                    ? 'Edit Produk'
+                                                    : 'Tambah Produk Baru'}
                                             </DialogTitle>
                                             <DialogDescription className="mt-0.5 text-[13px] font-medium text-neutral-500">
                                                 {editingProduct
-                                                    ? 'Modify existing product details and inventory settings.'
-                                                    : 'Complete the information below to create a new product.'}
+                                                    ? 'Ubah detail produk dan pengaturan inventaris.'
+                                                    : 'Lengkapi informasi di bawah untuk membuat produk baru.'}
                                             </DialogDescription>
                                         </div>
                                     </div>
@@ -691,7 +718,7 @@ export default function Index({ products, categories }: Props) {
                                                 className="size-4 text-neutral-400"
                                             />
                                             <Label className="text-[12px] font-bold tracking-widest text-neutral-500 uppercase">
-                                                Product Presentation
+                                                Gambar Produk
                                             </Label>
                                         </div>
                                         <div className="group relative">
@@ -833,11 +860,15 @@ export default function Index({ products, categories }: Props) {
                                                                 'category_id',
                                                                 v,
                                                             );
-                                                            setCategorySearch('');
+                                                            setCategorySearch(
+                                                                '',
+                                                            );
                                                         }}
                                                         onOpenChange={(o) => {
                                                             if (!o) {
-                                                                setCategorySearch('');
+                                                                setCategorySearch(
+                                                                    '',
+                                                                );
                                                             }
                                                         }}
                                                     >
@@ -887,14 +918,13 @@ export default function Index({ products, categories }: Props) {
                                                                 {filteredCategories.length ===
                                                                 0 ? (
                                                                     <p className="px-3 py-6 text-center text-[13px] text-muted-foreground">
-                                                                        Tidak ada
+                                                                        Tidak
+                                                                        ada
                                                                         kategori
                                                                     </p>
                                                                 ) : (
                                                                     filteredCategories.map(
-                                                                        (
-                                                                            c,
-                                                                        ) => (
+                                                                        (c) => (
                                                                             <SelectItem
                                                                                 key={
                                                                                     c.id
@@ -941,7 +971,7 @@ export default function Index({ products, categories }: Props) {
                                                             }
                                                             className={`flex-1 rounded-xl text-[12px] font-bold transition-all ${data.status === 'active' ? 'bg-white text-black shadow-sm dark:bg-neutral-800 dark:text-white' : 'text-neutral-500'}`}
                                                         >
-                                                            Active
+                                                            Aktif
                                                         </button>
                                                         <button
                                                             type="button"
@@ -953,7 +983,7 @@ export default function Index({ products, categories }: Props) {
                                                             }
                                                             className={`flex-1 rounded-xl text-[12px] font-bold transition-all ${data.status === 'inactive' ? 'bg-white text-black shadow-sm dark:bg-neutral-800 dark:text-white' : 'text-neutral-500'}`}
                                                         >
-                                                            Inactive
+                                                            Nonaktif
                                                         </button>
                                                     </div>
                                                 </div>
@@ -971,13 +1001,13 @@ export default function Index({ products, categories }: Props) {
                                             />
                                         </div>
                                         <h3 className="text-[15px] font-bold tracking-tight text-neutral-900 uppercase dark:text-white">
-                                            Pricing & Inventory
+                                            Harga & Inventaris
                                         </h3>
                                     </div>
                                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                                         <div className="grid gap-2">
                                             <Label className="ml-1 text-[12px] font-bold tracking-widest text-neutral-500 uppercase">
-                                                Base Price (Rp){' '}
+                                                Harga Dasar (Rp){' '}
                                                 <span className="text-red-500">
                                                     *
                                                 </span>
@@ -1027,7 +1057,7 @@ export default function Index({ products, categories }: Props) {
                                                 className="size-4 text-neutral-400"
                                             />
                                             <Label className="text-[12px] font-bold tracking-widest text-neutral-500 uppercase">
-                                                Product Description
+                                                Deskripsi Produk
                                             </Label>
                                         </div>
                                         <Textarea
@@ -1038,7 +1068,7 @@ export default function Index({ products, categories }: Props) {
                                                     e.target.value,
                                                 )
                                             }
-                                            placeholder="Write a detailed description for this product..."
+                                            placeholder="Tulis deskripsi detail untuk produk ini..."
                                             className="min-h-[140px] resize-none rounded-[1.5rem] border-neutral-200 p-5 text-[14px] leading-relaxed font-medium transition-all focus:border-black dark:border-neutral-800 dark:focus:border-white"
                                         />
                                     </div>
@@ -1053,7 +1083,7 @@ export default function Index({ products, categories }: Props) {
                                             />
                                         </div>
                                         <h3 className="text-[15px] font-bold tracking-tight text-neutral-900 uppercase dark:text-white">
-                                            Variant Configurations
+                                            Konfigurasi Varian
                                         </h3>
                                     </div>
                                     <VariantManager
@@ -1073,7 +1103,7 @@ export default function Index({ products, categories }: Props) {
                                 onClick={() => setIsDialogOpen(false)}
                                 className="h-14 flex-1 rounded-2xl border-neutral-200 font-bold hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
                             >
-                                Cancel
+                                Batal
                             </Button>
                             <Button
                                 type="submit"
@@ -1093,8 +1123,8 @@ export default function Index({ products, categories }: Props) {
                                     />
                                 )}
                                 {editingProduct
-                                    ? 'Save Changes'
-                                    : 'Create Product'}
+                                    ? 'Simpan Perubahan'
+                                    : 'Buat Produk'}
                             </Button>
                         </div>
                     </form>
@@ -1119,16 +1149,16 @@ export default function Index({ products, categories }: Props) {
                 }}
                 title={
                     confirmDialog.action === 'bulk-delete'
-                        ? `Delete ${selectedIds.length} Products`
-                        : 'Delete Product'
+                        ? `Hapus ${selectedIds.length} Produk`
+                        : 'Hapus Produk'
                 }
                 description={
                     confirmDialog.action === 'bulk-delete'
-                        ? `Are you sure you want to delete ${selectedIds.length} selected products? This action cannot be undone.`
-                        : 'Are you sure you want to delete this product? This action cannot be undone.'
+                        ? `Apakah Anda yakin ingin menghapus ${selectedIds.length} produk terpilih? Tindakan ini tidak dapat dibatalkan.`
+                        : 'Apakah Anda yakin ingin menghapus produk ini? Tindakan ini tidak dapat dibatalkan.'
                 }
-                confirmText="Delete"
-                cancelText="Cancel"
+                confirmText="Hapus"
+                cancelText="Batal"
                 variant="danger"
                 loading={confirmDialog.loading}
                 onConfirm={handleConfirmDelete}

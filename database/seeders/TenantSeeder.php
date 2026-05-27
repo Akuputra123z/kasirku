@@ -12,8 +12,10 @@ class TenantSeeder extends Seeder
 
         (new RoleAndPermissionSeeder)->run($tenantId);
         (new CategorySeeder)->run($tenantId);
+        (new BrandSeeder)->run($tenantId);
         (new CustomerSeeder)->run();
         (new VoucherSeeder)->run();
         (new PaymentMethodSeeder)->run();
+        (new SupplierSeeder)->run();
     }
 }

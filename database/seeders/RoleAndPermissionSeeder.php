@@ -17,6 +17,7 @@ class RoleAndPermissionSeeder extends Seeder
             'view-dashboard',
             'manage-products',
             'manage-categories',
+            'manage-brands',
             'manage-payment-methods',
             'manage-pos',
             'view-history',
@@ -27,6 +28,10 @@ class RoleAndPermissionSeeder extends Seeder
             'manage-settings',
             'manage-users',
             'manage-vouchers',
+            'manage-suppliers',
+            'manage-purchases',
+            'manage-stock',
+            'manage-customers',
         ];
 
         foreach ($permissions as $permission) {
@@ -44,6 +49,8 @@ class RoleAndPermissionSeeder extends Seeder
             'export-reports',
             'view-chat',
             'manage-vouchers',
+            'manage-suppliers',
+            'manage-customers',
         ]);
 
         $kasir = Role::firstOrCreate(['name' => 'kasir', 'guard_name' => 'web', 'tenant_id' => $tenantId]);

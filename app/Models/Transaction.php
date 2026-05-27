@@ -8,10 +8,20 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
+use Spatie\Activitylog\Support\LogOptions;
 
 class Transaction extends Model
 {
-    use HasFactory, HasTenant, SoftDeletes;
+    use HasFactory, HasTenant, LogsActivity, SoftDeletes;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logOnly(['transaction_code', 'total_amount', 'status'])
+            ->logOnlyDirty()
+            ->dontLogEmptyChanges();
+    }
 
     protected $fillable = [
         'tenant_id', 'transaction_code', 'subtotal_amount', 'tax_amount',

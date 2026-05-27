@@ -4,7 +4,6 @@ namespace App\Models;
 
 use App\Traits\HasTenant;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Voucher extends Model
@@ -19,9 +18,9 @@ class Voucher extends Model
     ];
 
     protected $casts = [
-        'value' => 'decimal:0',
-        'min_order_amount' => 'decimal:0',
-        'max_discount' => 'decimal:0',
+        'value' => 'float',
+        'min_order_amount' => 'float',
+        'max_discount' => 'float',
         'used_count' => 'integer',
         'max_uses' => 'integer',
         'valid_from' => 'datetime',
@@ -29,14 +28,7 @@ class Voucher extends Model
         'is_active' => 'boolean',
     ];
 
-    public function customers(): BelongsToMany
-    {
-        return $this->belongsToMany(Customer::class, 'customer_voucher')
-            ->withPivot(['used_at', 'transaction_id'])
-            ->withTimestamps();
-    }
-
-    public function isValid(int $orderAmount): bool
+    public function isValid(float $orderAmount): bool
     {
         if (! $this->is_active) {
             return false;
@@ -61,16 +53,16 @@ class Voucher extends Model
         return true;
     }
 
-    public function calculateDiscount(int $orderAmount): int
+    public function calculateDiscount(float $orderAmount): float
     {
         $discount = $this->type === 'percentage'
-            ? (int) ($orderAmount * $this->value / 100)
-            : (int) $this->value;
+            ? $orderAmount * $this->value / 100
+            : $this->value;
 
         if ($this->max_discount && $discount > $this->max_discount) {
-            $discount = (int) $this->max_discount;
+            $discount = $this->max_discount;
         }
 
-        return $discount;
+        return round($discount, 2);
     }
 }

@@ -251,7 +251,7 @@ export default function Index({ products, categories, filters }: Props) {
         setConfirmDialog({ open: true, action: 'bulk-delete', loading: false });
     };
 
-    const handleConfirmDelete = () => {
+  const handleConfirmDelete = () => {
         setConfirmDialog((prev) => ({ ...prev, loading: true }));
 
         if (confirmDialog.action === 'delete' && confirmDialog.productId) {
@@ -271,30 +271,33 @@ export default function Index({ products, categories, filters }: Props) {
                         loading: false,
                     });
                 },
+                onFinish: () => setConfirmDialog((prev) => ({ ...prev, loading: false })),
             });
         } else {
+            // 🛠️ FIX: Mengubah rute menjadi 'products.bulkDestroy' agar sesuai dengan backend Laravel
             router.post(
-                route('products.bulk-delete'),
+                route('products.bulkDestroy'),
                 { ids: selectedIds },
                 {
                     preserveScroll: true,
                     onSuccess: () => {
                         setConfirmDialog({
                             open: false,
-                            action: 'delete',
+                            action: 'bulk-delete', // 🛠️ Disamakan dengan action aslinya
                             loading: false,
                         });
-                        setRowSelection({});
+                        setRowSelection({}); // Membersihkan centang checkbox pada tabel
                         toast.success('Products deleted successfully');
                     },
                     onError: (err) => {
                         setConfirmDialog({
                             open: false,
-                            action: 'delete',
+                            action: 'bulk-delete', // 🛠️ Disamakan dengan action aslinya
                             loading: false,
                         });
-                        toast.error(Object.values(err)[0] as string);
+                        toast.error(Object.values(err)[0] as string || 'Gagal menghapus produk massal.');
                     },
+                    onFinish: () => setConfirmDialog((prev) => ({ ...prev, loading: false })),
                 },
             );
         }

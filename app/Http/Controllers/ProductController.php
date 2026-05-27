@@ -120,7 +120,7 @@ class ProductController extends Controller
     /**
      * Menghapus banyak produk sekaligus.
      */
-    public function bulkDestroy(Request $request)
+ public function bulkDestroy(Request $request)
     {
         Gate::authorize('manage-products');
 
@@ -130,31 +130,47 @@ class ProductController extends Controller
             return Redirect::back()->with('error', 'Tidak ada produk yang dipilih.');
         }
 
-        $products = Product::whereIn('id', $ids)->get();
-        $deleted = 0;
+        // 1. Ambil produk beserta relasi transaksi sekaligus (Eager Loading)
+        $products = Product::withExists('transactionDetails')
+            ->whereIn('id', $ids)
+            ->get();
+
+        $idsToDelete = [];
+        $imagesToDelete = [];
         $skipped = 0;
 
+        // 2. Pilah data di dalam memori PHP (Sangat cepat, tanpa query berulang)
         foreach ($products as $product) {
-            if ($product->transactionDetails()->exists()) {
+            if ($product->transaction_details_exists) {
                 $skipped++;
-
                 continue;
             }
 
+            $idsToDelete[] = $product->id;
             if ($product->image) {
-                Storage::disk('public')->delete($product->image);
+                $imagesToDelete[] = $product->image;
+            }
+        }
+
+        $deleted = count($idsToDelete);
+
+        if ($deleted > 0) {
+            // 3. Hapus semua file gambar sekaligus dalam satu operasi penyimpanan
+            if (!empty($imagesToDelete)) {
+                Storage::disk('public')->delete($imagesToDelete);
             }
 
-            $product->delete();
-            $deleted++;
+            // 4. Hapus semua data di database sekaligus hanya dengan SATU QUERY
+            Product::whereIn('id', $idsToDelete)->delete();
         }
 
-        $message = $deleted.' produk berhasil dihapus.';
+        // 5. Menyusun pesan respon
+        $message = $deleted . ' produk berhasil dihapus.';
         if ($skipped > 0) {
-            $message .= ' '.$skipped.' produk dilewati karena memiliki riwayat transaksi.';
+            $message .= ' ' . $skipped . ' produk dilewati karena memiliki riwayat transaksi.';
         }
 
-        return Redirect::back()->with('success', $message);
+        return Redirect::back()->with($deleted > 0 ? 'success' : 'error', $message);
     }
 
     /**

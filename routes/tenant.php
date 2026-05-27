@@ -49,7 +49,7 @@ Route::middleware(['web', 'tenant.from-user'])->group(function () {
         Route::post('brands/import', [BrandController::class, 'import'])->name('brands.import');
         Route::get('brands/import/template', [BrandController::class, 'downloadTemplate'])->name('brands.import.template');
         Route::resource('brands', BrandController::class);
-        Route::post('products/bulk-delete', [ProductController::class, 'bulkDestroy'])->middleware('permission:manage-products');
+        Route::post('products/bulk-delete', [ProductController::class, 'bulkDestroy'])->middleware('permission:manage-products')->name('products.bulkDestroy');
         Route::post('products/import', [ProductController::class, 'import'])->middleware('permission:manage-products')->name('products.import');
         Route::get('products/import/template', [ProductController::class, 'downloadTemplate'])->middleware('permission:manage-products')->name('products.import.template');
         Route::resource('products', ProductController::class)->middleware('permission:manage-products');

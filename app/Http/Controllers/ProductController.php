@@ -120,7 +120,7 @@ class ProductController extends Controller
     /**
      * Menghapus banyak produk sekaligus.
      */
- public function bulkDestroy(Request $request)
+    public function bulkDestroy(Request $request)
     {
         Gate::authorize('manage-products');
 
@@ -143,6 +143,7 @@ class ProductController extends Controller
         foreach ($products as $product) {
             if ($product->transaction_details_exists) {
                 $skipped++;
+
                 continue;
             }
 
@@ -156,7 +157,7 @@ class ProductController extends Controller
 
         if ($deleted > 0) {
             // 3. Hapus semua file gambar sekaligus dalam satu operasi penyimpanan
-            if (!empty($imagesToDelete)) {
+            if (! empty($imagesToDelete)) {
                 Storage::disk('public')->delete($imagesToDelete);
             }
 
@@ -165,9 +166,9 @@ class ProductController extends Controller
         }
 
         // 5. Menyusun pesan respon
-        $message = $deleted . ' produk berhasil dihapus.';
+        $message = $deleted.' produk berhasil dihapus.';
         if ($skipped > 0) {
-            $message .= ' ' . $skipped . ' produk dilewati karena memiliki riwayat transaksi.';
+            $message .= ' '.$skipped.' produk dilewati karena memiliki riwayat transaksi.';
         }
 
         return Redirect::back()->with($deleted > 0 ? 'success' : 'error', $message);
@@ -187,7 +188,7 @@ class ProductController extends Controller
         ]);
     }
 
-  public function import(Request $request)
+    public function import(Request $request)
     {
         Gate::authorize('manage-products');
 
@@ -211,7 +212,7 @@ class ProductController extends Controller
                 'import' => [
                     'imported' => 0,
                     'errors' => ['File Excel kosong atau tidak valid.'],
-                ]
+                ],
             ]);
         }
 
@@ -245,7 +246,7 @@ class ProductController extends Controller
             $category = null;
             if (! blank($rowData['category'] ?? null)) {
                 $category = Category::firstOrCreate([
-                    'name' => $rowData['category']
+                    'name' => $rowData['category'],
                 ]);
             }
 
@@ -253,7 +254,7 @@ class ProductController extends Controller
             $brand = null;
             if (! blank($rowData['brand'] ?? null)) {
                 $brand = Brand::firstOrCreate([
-                    'name' => $rowData['brand']
+                    'name' => $rowData['brand'],
                 ]);
             }
 
@@ -283,7 +284,7 @@ class ProductController extends Controller
             'import' => [
                 'imported' => $imported,
                 'errors' => $errors,
-            ]
+            ],
         ]);
     }
 

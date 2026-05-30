@@ -2,6 +2,16 @@
 
 import { useState, useCallback } from 'react';
 
+/**
+ * Web Bluetooth API hook — HANYA untuk printer BLE (Bluetooth Low Energy).
+ *
+ * ⚠️ RPP02N menggunakan Classic SPP (Serial Port Profile), BUKAN BLE.
+ * Web Bluetooth tidak support Classic SPP.
+ * Gunakan backend driver "bluetooth" (PHP → Python → serial) sebagai gantinya.
+ *
+ * Hook ini disimpan untuk kompatibilitas dengan printer BLE di masa depan.
+ */
+
 const SPP_SERVICE = '00001101-0000-1000-8000-00805f9b34fb';
 
 interface UseBluetoothPrintResult {

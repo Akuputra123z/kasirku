@@ -1,6 +1,6 @@
 'use client';
 
-import { Head } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import {
     DollarSign,
     ShoppingCart,
@@ -91,6 +91,16 @@ interface Props {
 }
 
 export default function History({ transactions, summary }: Props) {
+    const page = usePage();
+    const tenant = (page.props as any).tenant;
+    const storeData = tenant
+        ? {
+              name: tenant.name,
+              address: tenant.address,
+              phone: tenant.phone,
+              footer: tenant.settings?.receipt_footer,
+          }
+        : null;
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedTransaction, setSelectedTransaction] =
         useState<Transaction | null>(null);
@@ -438,6 +448,7 @@ export default function History({ transactions, summary }: Props) {
                     <ReceiptComponent
                         ref={receiptRef}
                         transaction={selectedTransaction}
+                        store={storeData}
                     />
                 </div>
             )}

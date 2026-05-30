@@ -4,10 +4,13 @@ namespace App\PrintConnectors;
 
 use Illuminate\Support\Facades\Log;
 use Mike42\Escpos\PrintConnectors\PrintConnector;
+use Symfony\Component\Process\Process;
 
 class CupsPrintConnector implements PrintConnector
 {
     private string $buffer = '';
+
+    private const TIMEOUT = 15;
 
     public function __construct(
         private string $printerName,
@@ -29,49 +32,81 @@ class CupsPrintConnector implements PrintConnector
             return;
         }
 
-        $this->preparePrinter();
+        if (! $this->isCupsAvailable()) {
+            throw new \RuntimeException(
+                'CUPS (lp/lpstat) tidak tersedia di server ini. Gunakan driver "file" sebagai gantinya.'
+            );
+        }
+
+        $activePrinter = $this->resolveActivePrinter();
+
+        $this->preparePrinter($activePrinter);
 
         $tmpFile = tempnam(sys_get_temp_dir(), 'receipt_').'.bin';
         file_put_contents($tmpFile, $this->buffer);
 
-        $activePrinter = $this->resolveActivePrinter();
-
         try {
-            $cmd = sprintf(
-                'lp -d %s -o raw %s 2>/dev/null',
-                escapeshellarg($activePrinter),
-                escapeshellarg($tmpFile),
-            );
+            $process = new Process([
+                'lp',
+                '-d',
+                $activePrinter,
+                '-o',
+                'raw',
+                $tmpFile,
+            ]);
+            $process->setTimeout(self::TIMEOUT);
+            $process->run();
 
-            exec($cmd, $output, $exitCode);
-
-            if ($exitCode !== 0) {
-                throw new \Exception("CUPS lp command failed with exit code {$exitCode}");
+            if (! $process->isSuccessful()) {
+                throw new \RuntimeException(
+                    'CUPS lp command failed: '.$process->getErrorOutput()
+                );
             }
 
-            usleep(1_000_000);
+            usleep(500_000);
 
             Log::info('Receipt sent via CUPS', [
                 'printer' => $activePrinter,
                 'size' => strlen($this->buffer),
             ]);
+        } catch (\Exception $e) {
+            Log::error('CUPS print failed', [
+                'printer' => $activePrinter,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
         } finally {
             @unlink($tmpFile);
         }
     }
 
+    private function isCupsAvailable(): bool
+    {
+        $process = new Process(['which', 'lp']);
+        $process->setTimeout(5);
+        $process->run();
+
+        return $process->isSuccessful() && trim($process->getOutput()) !== '';
+    }
+
     private function resolveActivePrinter(): string
     {
-        exec('lpstat -p '.escapeshellarg($this->printerName).' 2>/dev/null', $out, $code);
+        $process = new Process(['lpstat', '-p', $this->printerName]);
+        $process->setTimeout(5);
+        $process->run();
 
-        if ($code === 0 && ! empty($out)) {
+        if ($process->isSuccessful() && trim($process->getOutput()) !== '') {
             return $this->printerName;
         }
 
-        $output = shell_exec('lpstat -p 2>/dev/null | grep -E "^printer " | head -5');
-        if ($output) {
-            preg_match('/^printer (\S+)/m', $output, $m);
-            if (! empty($m[1])) {
+        $listProcess = new Process(['sh', '-c', 'lpstat -p 2>/dev/null | grep -E "^printer " | head -5']);
+        $listProcess->setTimeout(5);
+        $listProcess->run();
+
+        if ($listProcess->isSuccessful()) {
+            $output = $listProcess->getOutput();
+            if (preg_match('/^printer (\S+)/m', $output, $m)) {
                 Log::info("CUPS printer {$this->printerName} not found, falling back to {$m[1]}");
 
                 return $m[1];
@@ -81,12 +116,18 @@ class CupsPrintConnector implements PrintConnector
         return $this->printerName;
     }
 
-    private function preparePrinter(): void
+    private function preparePrinter(string $printer): void
     {
-        exec('cancel -a '.escapeshellarg($this->printerName).' 2>/dev/null');
+        $cancelProcess = new Process(['cancel', '-a', $printer]);
+        $cancelProcess->setTimeout(5);
+        $cancelProcess->run();
+
         usleep(200_000);
 
-        exec('cupsenable '.escapeshellarg($this->printerName).' 2>/dev/null');
+        $enableProcess = new Process(['cupsenable', $printer]);
+        $enableProcess->setTimeout(5);
+        $enableProcess->run();
+
         usleep(500_000);
     }
 

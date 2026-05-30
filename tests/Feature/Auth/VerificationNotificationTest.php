@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\User;
-use Illuminate\Auth\Notifications\VerifyEmail;
+use App\Notifications\EmailOtpVerification;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Fortify\Features;
 
@@ -18,7 +18,7 @@ test('sends verification notification', function () {
         ->post(route('verification.send'))
         ->assertRedirect(route('home'));
 
-    Notification::assertSentTo($user, \App\Notifications\EmailOtpVerification::class);
+    Notification::assertSentTo($user, EmailOtpVerification::class);
 });
 
 test('does not send verification notification if email is verified', function () {

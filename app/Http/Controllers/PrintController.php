@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Mike42\Escpos\PrintConnectors\FilePrintConnector;
 use Mike42\Escpos\PrintConnectors\NetworkPrintConnector;
 use Mike42\Escpos\PrintConnectors\WindowsPrintConnector;
@@ -29,12 +30,22 @@ class PrintController extends Controller
             $driver = config('printing.driver');
         }
 
+        $rateLimitKey = 'print:'.$request->user()?->id.':'.$transaction->id;
+        if (RateLimiter::tooManyAttempts($rateLimitKey, 1)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cetak sedang diproses. Tunggu sebentar.',
+            ], 429);
+        }
+
+        RateLimiter::hit($rateLimitKey, 10);
+
         try {
             $connector = $this->resolveConnector($driver);
             $this->buildAndPrint($connector, $transaction);
 
             $message = match ($driver) {
-                'bluetooth' => 'Struk dikirim ke printer. Jika tidak keluar, cek koneksi Bluetooth printer.',
+                'bluetooth' => 'Struk dikirim ke printer Bluetooth. Jika tidak keluar, cek koneksi printer.',
                 'usb' => 'Struk berhasil dicetak',
                 'file' => 'Struk tersimpan. Jalankan ./send-receipt-to-printer.sh untuk mencetak.',
                 default => 'Struk berhasil dicetak',
@@ -49,25 +60,37 @@ class PrintController extends Controller
 
             try {
                 $fileConfig = config('printing.connectors.file');
-                $path = $fileConfig['path'].'/'.now()->timestamp.'.bin';
+                $filePath = $fileConfig['path'];
+
+                if (! is_dir($filePath)) {
+                    mkdir($filePath, 0755, true);
+                }
+
+                $path = $filePath.'/'.now()->timestamp.'_'.uniqid().'.bin';
                 $connector = new FilePrintConnector($path);
                 $this->buildAndPrint($connector, $transaction);
 
+                $fallbackMsg = match ($driver) {
+                    'bluetooth' => 'Cetak Bluetooth gagal, struk tersimpan sebagai file. Cek Bluetooth printer lalu jalankan ./send-receipt-to-printer.sh',
+                    'usb' => 'Cetak USB gagal, struk tersimpan sebagai file. Pastikan printer terdaftar dengan benar (CUPS di macOS/Linux, SMB share di Windows).',
+                    default => 'Cetak gagal, struk tersimpan sebagai file.',
+                };
+
                 return response()->json([
                     'success' => true,
-                    'message' => 'Cetak gagal, struk tersimpan sebagai file. Jalankan ./send-receipt-to-printer.sh',
+                    'message' => $fallbackMsg,
                     'driver' => 'file',
                     'file' => $path,
                 ]);
             } catch (\Exception $fallbackException) {
                 Log::error('Print and file fallback both failed', [
-                    'bluetooth_error' => $e->getMessage(),
+                    'print_error' => $e->getMessage(),
                     'file_error' => $fallbackException->getMessage(),
                 ]);
 
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cetak gagal: '.$e->getMessage().'. File fallback juga gagal: '.$fallbackException->getMessage(),
+                    'message' => 'Cetak gagal (driver: '.$driver.'). Cek log untuk detail.',
                 ], 500);
             }
         }
@@ -211,14 +234,41 @@ class PrintController extends Controller
     {
         $config = config('printing.connectors.'.$driver);
 
+        if (! $config) {
+            throw new \InvalidArgumentException("Print driver '{$driver}' is not configured");
+        }
+
+        if ($driver === 'file') {
+            $filePath = $config['path'];
+            if (! is_dir($filePath)) {
+                mkdir($filePath, 0755, true);
+            }
+
+            return new FilePrintConnector($filePath.'/'.now()->timestamp.'_'.uniqid().'.bin');
+        }
+
         return match ($driver) {
             'network' => new NetworkPrintConnector($config['host'], $config['port']),
-            'file' => new FilePrintConnector($config['path'].'/'.now()->timestamp.'.bin'),
             'windows' => new WindowsPrintConnector($config['printer']),
-            'usb' => new CupsPrintConnector($config['printer']),
+            'usb' => $this->resolveUsbConnector($config),
             'bluetooth' => $this->bluetoothConnector($config),
             default => throw new \InvalidArgumentException("Unknown print driver: {$driver}"),
         };
+    }
+
+    private function resolveUsbConnector(array $config): CupsPrintConnector|WindowsPrintConnector
+    {
+        $osFamily = PHP_OS_FAMILY;
+
+        if ($osFamily === 'Windows') {
+            Log::info('Using WindowsPrintConnector for USB driver (Windows detected)');
+
+            return new WindowsPrintConnector($config['printer']);
+        }
+
+        Log::info('Using CupsPrintConnector for USB driver ('.($osFamily ?: 'Unix').' detected)');
+
+        return new CupsPrintConnector($config['printer']);
     }
 
     private function bluetoothConnector(array $config): BluetoothPrintConnector

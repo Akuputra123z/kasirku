@@ -21,6 +21,8 @@ import {
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Receipt as ReceiptComponent } from '@/components/receipt';
+import { useUsbPrint } from '@/hooks/use-usb-print';
+import { buildReceipt } from '@/lib/escpos';
 
 import { Button } from '@/components/ui/button';
 import { CurrencyInput } from '@/components/ui/currency-input';
@@ -353,6 +355,12 @@ export default function POS({
     const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
     const [cartSheetOpen, setCartSheetOpen] = useState(false);
+    const {
+        print: usbPrint,
+        isSupported: webUsbSupported,
+        isPrinting: isWebUsbPrinting,
+        deviceName: usbDeviceName,
+    } = useUsbPrint();
 
     const allCustomers = useMemo(
         () => [...customers, ...localCustomers],
@@ -499,6 +507,62 @@ export default function POS({
         },
         [lastTransaction, isPrinting],
     );
+
+    const handleWebUsbPrint = useCallback(async () => {
+        if (!lastTransaction) {
+            toast.error('Data transaksi tidak ditemukan');
+            return;
+        }
+
+        if (!webUsbSupported) {
+            toast.error('WebUSB tidak didukung. Gunakan Chrome atau Edge.');
+            return;
+        }
+
+        const storeData = {
+            storeName: tenant?.name || 'TOKO',
+            storeAddress: tenant?.address || '',
+            storePhone: tenant?.phone || '',
+            transactionCode: lastTransaction.transaction_code,
+            date: lastTransaction.created_at
+                ? new Date(lastTransaction.created_at).toLocaleString('id-ID')
+                : new Date().toLocaleString('id-ID'),
+            cashier: lastTransaction.user?.name || 'Admin',
+            orderType:
+                lastTransaction.order_type === 'service'
+                    ? 'Service'
+                    : lastTransaction.order_type === 'pre_order'
+                      ? 'Pre-Order'
+                      : 'Direct',
+            paymentMethod: lastTransaction.payment_method?.name,
+            customer: lastTransaction.customer?.name,
+            details: (lastTransaction.details || []).map((d: any) => ({
+                name: d.product_name || d.product?.name || 'Product',
+                qty: d.quantity,
+                total: d.price * d.quantity,
+            })),
+            subtotal: lastTransaction.subtotal_amount,
+            discount: lastTransaction.discount_amount,
+            tax: lastTransaction.tax_amount,
+            total: lastTransaction.total_amount,
+            paid: lastTransaction.paid_amount,
+            change: lastTransaction.change_amount,
+            footer:
+                tenant?.settings?.receipt_footer || 'TERIMA KASIH',
+        };
+
+        try {
+            const data = buildReceipt(storeData);
+            await usbPrint(data);
+            toast.success(
+                usbDeviceName
+                    ? `Struk berhasil dikirim ke ${usbDeviceName}`
+                    : 'Struk berhasil dicetak',
+            );
+        } catch (err: any) {
+            toast.error(err?.message || 'Gagal mencetak via USB');
+        }
+    }, [lastTransaction, tenant, webUsbSupported, usbPrint, usbDeviceName]);
 
     const categories = useMemo(() => {
         const cats = Array.from(
@@ -1706,6 +1770,49 @@ export default function POS({
                             <Receipt className="size-4" />{' '}
                             {isPrinting ? 'Mencetak...' : 'Cetak Printer (USB)'}
                         </Button>
+                        <Button
+                            onClick={() => printToPrinter('file')}
+                            disabled={isPrinting}
+                            variant="secondary"
+                            className="flex h-11 w-full items-center gap-2 rounded-xl text-[13px] font-bold"
+                        >
+                            <svg
+                                className="size-4"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                            >
+                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                                <polyline points="14 2 14 8 20 8" />
+                            </svg>{' '}
+                            {isPrinting ? 'Menyimpan...' : 'Simpan Struk (File)'}
+                        </Button>
+                        {webUsbSupported && (
+                            <Button
+                                onClick={handleWebUsbPrint}
+                                disabled={isWebUsbPrinting}
+                                variant="default"
+                                className="flex h-11 w-full items-center gap-2 rounded-xl border-2 border-green-500 bg-green-50 text-[13px] font-bold text-green-700 hover:bg-green-100"
+                            >
+                                <svg
+                                    className="size-4"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                >
+                                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                                    <path d="M8 21h8" />
+                                    <path d="M12 17v4" />
+                                </svg>{' '}
+                                {isWebUsbPrinting
+                                    ? 'Mencetak...'
+                                    : usbDeviceName
+                                      ? `Cetak ke ${usbDeviceName}`
+                                      : 'Cetak Otomatis (USB)'}
+                            </Button>
+                        )}
                         <Button
                             onClick={() => setIsSuccessModalOpen(false)}
                             className="h-11 w-full rounded-xl bg-secondary text-[13px] font-bold text-secondary-foreground hover:bg-secondary/80"

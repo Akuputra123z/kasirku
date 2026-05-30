@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'driver' => env('PRINT_DRIVER', 'network'),
+    'driver' => env('PRINT_DRIVER', 'file'),
 
     'connectors' => [
         'network' => [

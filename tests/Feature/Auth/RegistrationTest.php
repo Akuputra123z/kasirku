@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Tenant;
+use App\Models\User;
 use Laravel\Fortify\Features;
 
 beforeEach(function () {
@@ -33,7 +34,7 @@ test('store registration creates tenant and returns redirect', function () {
 });
 
 test('store registration rejects duplicate email', function () {
-    \App\Models\User::factory()->create(['email' => 'test@example.com']);
+    User::factory()->create(['email' => 'test@example.com']);
 
     $response = $this->postJson(route('stores.register'), [
         'name' => 'Test User',

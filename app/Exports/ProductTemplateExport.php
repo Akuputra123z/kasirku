@@ -30,22 +30,22 @@ class ProductTemplateExport implements FromArray, WithHeadings
     {
         return [
             [
-                'Teh Botol', 
-                'Minuman teh botol 350ml', 
-                5000, 
-                100, 
-                'Minuman Ringan', 
+                'Teh Botol',
+                'Minuman teh botol 350ml',
+                5000,
+                100,
+                'Minuman Ringan',
                 '', // Diisi kosong jika produk belum memiliki brand resmi
-                'active'
+                'active',
             ],
             [
-                'Keripik Singkong', 
-                'Keripik singkong original 200gr', 
-                3500, 
-                50, 
-                'Makanan Ringan', 
-                '', 
-                'active'
+                'Keripik Singkong',
+                'Keripik singkong original 200gr',
+                3500,
+                50,
+                'Makanan Ringan',
+                '',
+                'active',
             ],
         ];
     }

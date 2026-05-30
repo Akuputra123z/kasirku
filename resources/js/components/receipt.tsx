@@ -22,10 +22,16 @@ interface ReceiptProps {
             subtotal?: number;
         }[];
     };
+    store?: {
+        name?: string;
+        address?: string;
+        phone?: string;
+        footer?: string;
+    } | null;
 }
 
 export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
-    ({ transaction }, ref) => {
+    ({ transaction, store }, ref) => {
         const formatCurrency = (val: number) => {
             return new Intl.NumberFormat('id-ID', {
                 style: 'currency',
@@ -49,6 +55,11 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
                   ? 'Pre-Order'
                   : 'Direct';
 
+        const storeName = store?.name || 'TOKO';
+        const storeAddress = store?.address || '';
+        const storePhone = store?.phone || '';
+        const footer = store?.footer || 'TERIMA KASIH';
+
         return (
             <div
                 ref={ref}
@@ -57,10 +68,14 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
                 {/* Header Toko */}
                 <div className="mb-4 text-center">
                     <h2 className="text-[18px] font-bold tracking-wide uppercase">
-                        AMERTA KOMPUTER
+                        {storeName}
                     </h2>
-                    <p className="text-[11px]">Jl. Diponegoro No.88, Rembang</p>
-                    <p className="text-[11px]">Telp: 085740724793</p>
+                    {storeAddress && (
+                        <p className="text-[11px]">{storeAddress}</p>
+                    )}
+                    {storePhone && (
+                        <p className="text-[11px]">Telp: {storePhone}</p>
+                    )}
                 </div>
 
                 {/* No. Resi */}
@@ -179,7 +194,7 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
 
                 {/* Footer */}
                 <div className="mt-4 border-t-2 border-black pt-3 text-center text-[11px]">
-                    <p className="text-[14px] font-bold">TERIMA KASIH</p>
+                    <p className="text-[14px] font-bold">{footer}</p>
                     <p>Barang yang sudah dibeli tidak dapat</p>
                     <p>ditukar atau dikembalikan</p>
                     <div className="mt-3 text-[9px] opacity-40">

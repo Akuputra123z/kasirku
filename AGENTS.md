@@ -70,14 +70,81 @@
 - Auth tests di `tests/Feature/Auth/`
 - Tidak ada database tenancy di test (SQLite :memory:) — test hanya central context
 
-## Printing (macOS + RPP02N Bluetooth)
+## Printing (macOS + RPP02N Bluetooth / USB)
 
-- **PRINT_DRIVER=file** (default sekarang) — receipt disimpan ke `storage/logs/receipts/{timestamp}.bin`
-- **"Cetak Printer"** button di POS → backend simpan file .bin, tidak kirim ke printer langsung
-- **Script helper:** `./send-receipt-to-printer.sh` — kirim latest .bin ke `/dev/cu.RPP02N` via Bluetooth
-- **"Print Struk"** (react-to-print) → browser native print dialog, hanya untuk printer yang terdaftar di System Settings
-- **"Cetak Bluetooth"** (Web Bluetooth) → BLE only, RPP02N (Classic SPP) tidak support
+### Architecture
 
-**Jika mau ganti driver:**
-- `PRINT_DRIVER=bluetooth` + `PRINT_BLUETOOTH_DEVICE=/dev/cu.RPP02N` + `PRINT_BLUETOOTH_MAC=86:67:7A:9E:0E:1B` — kirim langsung via PHP (rawan gagal di macOS)
-- `PRINT_DRIVER=file` — simpan ke file, kirim manual via script (lebih reliable)
+```
+[Success Modal] → POST /print/receipt/{id}?driver={driver}
+                    ↓
+           PrintController (rate-limited 1 hit / 10 detik per user+transaksi)
+                    ↓
+           resolveConnector(driver)
+              ├── file    → FilePrintConnector      (ke storage/logs/receipts/)
+              ├── usb     → CupsPrintConnector       (via CUPS `lp -d printer -o raw`)
+              ├── bluetooth → BluetoothPrintConnector (via Python send-receipt.py)
+              ├── network → NetworkPrintConnector    (TCP socket ke host:port)
+              └── windows → WindowsPrintConnector    (Windows SMB)
+                    ↓
+           Jika gagal → fallback otomatis ke file driver
+```
+
+### Default: `PRINT_DRIVER=file` (paling aman & stabil)
+
+Receipt disimpan ke `storage/logs/receipts/{timestamp}_{uniqid}.bin`. Tidak ada risiko hang/blokir HTTP request. Cetak manual via:
+
+```bash
+./send-receipt-to-printer.sh              # cetak file .bin terbaru
+./send-receipt-to-printer.sh path/file    # cetak file tertentu
+```
+
+### Tombol di Success Modal (POS)
+
+| Tombol | Driver | Use Case |
+|---|---|---|
+| **Cetak Bluetooth** | `bluetooth` | RPP02N via Python + serial |
+| **Cetak Printer (USB)** | `usb` | Printer USB via CUPS (`lp`) |
+| **Simpan Struk (File)** | `file` | Simpan ke disk, cetak nanti |
+
+### Keamanan & Stabilitas
+
+- **Rate limiting:** Session-based, 1 print per 10 detik per user+transaksi (cegah double-click)
+- **Fallback file:** Setiap driver gagal → otomatis simpan ke file, user tetap dapat struk
+- **No raw `exec()`:** Semua penggunaan `exec()` diganti dengan `Symfony\Component\Process\Process` (timeout 15-30 detik)
+- **Symfony Process:** Timeout, error output capture, exit code checking
+- **Unique filename:** Timestamp + `uniqid()` untuk hindari tabrakan nama file
+
+### Driver Config
+
+| Env | Default | Driver |
+|---|---|---|
+| `PRINT_DRIVER` | `file` | Semua |
+| `PRINT_FILE_PATH` | `storage/logs/receipts` | file |
+| `PRINT_BLUETOOTH_DEVICE` | `/dev/cu.RPP02N` | bluetooth |
+| `PRINT_BLUETOOTH_MAC` | — | bluetooth |
+| `PRINT_USB_PRINTER` | `STMicroelectronics_58Printer` | usb |
+| `PRINT_HOST` | `127.0.0.1` | network |
+| `PRINT_PORT` | `9100` | network |
+
+### Scripts
+
+| Script | Env Vars |
+|---|---|
+| `send-receipt.py` | `PRINT_DEVICE`, `PRINT_BAUD`, `PRINT_LOCK_FILE` |
+| `send-receipt-to-printer.sh` | `PRINT_DEVICE`, `PRINT_MAC`, `PRINT_BAUD`, `PRINT_RECEIPTS_DIR` |
+| `diagnose-printer.sh` | `PRINT_DEVICE`, `PRINT_MAC` |
+
+Semua script membaca env var, fallback ke default hardcoded.
+
+### "Cetak Bluetooth" vs "Print Struk" vs Web Bluetooth
+
+- **"Cetak Bluetooth"** (backend, POS success modal): PHP → Python script → serial port (`/dev/cu.RPP02N`). **Ini yang berfungsi untuk RPP02N.**
+- **"Print Struk"** (react-to-print, history page): browser native print dialog untuk printer thermal yang terdaftar di System Settings via CUPS driver.
+- **Web Bluetooth API** (`use-bluetooth-print.ts`): **RPP02N tidak support**. RPP02N pakai Classic SPP, Web Bluetooth hanya untuk BLE. Hook ini disimpan untuk masa depan (printer BLE).
+
+### Tips Deploy / Production
+
+1. Set `PRINT_DRIVER=file` — jangan pernah set ke `bluetooth` atau `usb` di production tanpa testing
+2. Pastikan `storage/logs/receipts/` writable
+3. Untuk cetak realtime production: pasang queue worker (`QUEUE_CONNECTION=database`) dan buat `PrintReceiptJob`
+4. Di macOS local: tetap pakai `file` + `./send-receipt-to-printer.sh` untuk kirim ke RPP02N

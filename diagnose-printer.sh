@@ -1,7 +1,7 @@
 #!/bin/bash
 # Diagnose RPP02N Bluetooth printer connection
-DEVICE="/dev/cu.RPP02N"
-MAC="86:67:7A:9E:0E:1B"
+DEVICE="${PRINT_DEVICE:-/dev/cu.RPP02N}"
+MAC="${PRINT_MAC:-86:67:7A:9E:0E:1B}"
 
 echo "=== Printer Diagnostics ==="
 echo ""

@@ -5,9 +5,9 @@ import time
 import os
 import fcntl
 
-DEVICE = "/dev/cu.RPP02N"
-BAUD = 9600
-LOCK_FILE = "/tmp/rpp02n_print.lock"
+DEVICE = os.environ.get("PRINT_DEVICE", "/dev/cu.RPP02N")
+BAUD = int(os.environ.get("PRINT_BAUD", "9600"))
+LOCK_FILE = os.environ.get("PRINT_LOCK_FILE", "/tmp/rpp02n_print.lock")
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "storage/logs/receipts/bluetooth_send.log")
 
 def log_msg(msg: str):

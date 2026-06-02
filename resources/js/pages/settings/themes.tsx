@@ -36,15 +36,13 @@ function ThemeCard({
         >
             {/* Color swatches */}
             <div className="flex gap-1.5" aria-hidden>
-                {(['primary', 'sidebar', 'ring'] as const).map(
-                    (key) => (
-                        <div
-                            key={key}
-                            className="size-7 rounded-full ring-1 ring-black/5"
-                            style={{ backgroundColor: (theme.colors as any)[key] }}
-                        />
-                    ),
-                )}
+                {(['primary', 'sidebar', 'ring'] as const).map((key) => (
+                    <div
+                        key={key}
+                        className="size-7 rounded-full ring-1 ring-black/5"
+                        style={{ backgroundColor: (theme.colors as any)[key] }}
+                    />
+                ))}
             </div>
 
             <div className="text-center">

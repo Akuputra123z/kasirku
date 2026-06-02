@@ -871,6 +871,7 @@ export default function Index({
                                                                                 {
                                                                                     p.sku
                                                                                 }
+
                                                                                 )
                                                                             </span>
                                                                         )}

@@ -118,17 +118,13 @@ class CupsPrintConnector implements PrintConnector
 
     private function preparePrinter(string $printer): void
     {
-        $cancelProcess = new Process(['cancel', '-a', $printer]);
-        $cancelProcess->setTimeout(5);
-        $cancelProcess->run();
-
-        usleep(200_000);
-
+        // Do not blindly cancel all print jobs (cancel -a) as it deletes valid queued receipts
+        // from other users/transactions. We only run cupsenable to ensure the printer is online.
         $enableProcess = new Process(['cupsenable', $printer]);
         $enableProcess->setTimeout(5);
         $enableProcess->run();
 
-        usleep(500_000);
+        usleep(200_000);
     }
 
     public function __destruct() {}

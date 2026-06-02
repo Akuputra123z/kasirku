@@ -19,10 +19,9 @@ import {
     TicketPercent,
 } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useReactToPrint } from 'react-to-print';
 import { toast } from 'sonner';
 import { Receipt as ReceiptComponent } from '@/components/receipt';
-import { useUsbPrint } from '@/hooks/use-usb-print';
-import { buildReceipt } from '@/lib/escpos';
 
 import { Button } from '@/components/ui/button';
 import { CurrencyInput } from '@/components/ui/currency-input';
@@ -33,7 +32,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import VisuallyHidden from '@/components/ui/visually-hidden';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -44,8 +42,11 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import VisuallyHidden from '@/components/ui/visually-hidden';
+import { useBluetoothPrint } from '@/hooks/use-bluetooth-print';
+import { useReceiptData } from '@/hooks/use-receipt-data';
+import { useUsbPrint } from '@/hooks/use-usb-print';
 import posRoute from '@/routes/pos';
-import printRoute from '@/routes/print';
 import vouchersRoute from '@/routes/vouchers';
 
 interface ProductVariant {
@@ -353,7 +354,6 @@ export default function POS({
     const [redeemPointsInput, setRedeemPointsInput] = useState('');
     const [localCustomers, setLocalCustomers] = useState<Customer[]>([]);
     const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
-    const [isPrinting, setIsPrinting] = useState(false);
     const [cartSheetOpen, setCartSheetOpen] = useState(false);
     const {
         print: usbPrint,
@@ -361,6 +361,21 @@ export default function POS({
         isPrinting: isWebUsbPrinting,
         deviceName: usbDeviceName,
     } = useUsbPrint();
+
+    const {
+        print: bluetoothPrint,
+        isSupported: webBluetoothSupported,
+        isPrinting: isWebBluetoothPrinting,
+        deviceName: bluetoothDeviceName,
+    } = useBluetoothPrint();
+
+    const { fetchRaw: fetchReceiptRaw } = useReceiptData();
+
+    const receiptPrintRef = useRef<HTMLDivElement>(null);
+    const handleReactPrint = useReactToPrint({
+        contentRef: receiptPrintRef,
+        documentTitle: () => lastTransaction?.transaction_code || 'Struk',
+    });
 
     const allCustomers = useMemo(
         () => [...customers, ...localCustomers],
@@ -467,47 +482,6 @@ export default function POS({
         }
     }, [flashTransaction]);
 
-    const printToPrinter = useCallback(
-        async (driver = 'usb') => {
-            const id = lastTransaction?.id;
-            if (!id) {
-                toast.error('Data transaksi tidak ditemukan');
-
-                return;
-            }
-            if (isPrinting) return;
-            setIsPrinting(true);
-            const token =
-                document
-                    .querySelector('meta[name="csrf-token"]')
-                    ?.getAttribute('content') || '';
-            try {
-                const url =
-                    printRoute.receipt(id).url +
-                    '?driver=' +
-                    encodeURIComponent(driver);
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-TOKEN': token,
-                        Accept: 'application/json',
-                    },
-                });
-                const data = await res.json();
-                if (data.success) {
-                    toast.success(data.message || 'Struk berhasil dicetak');
-                } else {
-                    toast.error(data.message);
-                }
-            } catch (err: any) {
-                toast.error(err?.message || 'Gagal mencetak struk');
-            } finally {
-                setIsPrinting(false);
-            }
-        },
-        [lastTransaction, isPrinting],
-    );
-
     const handleWebUsbPrint = useCallback(async () => {
         if (!lastTransaction) {
             toast.error('Data transaksi tidak ditemukan');
@@ -519,41 +493,9 @@ export default function POS({
             return;
         }
 
-        const storeData = {
-            storeName: tenant?.name || 'TOKO',
-            storeAddress: tenant?.address || '',
-            storePhone: tenant?.phone || '',
-            transactionCode: lastTransaction.transaction_code,
-            date: lastTransaction.created_at
-                ? new Date(lastTransaction.created_at).toLocaleString('id-ID')
-                : new Date().toLocaleString('id-ID'),
-            cashier: lastTransaction.user?.name || 'Admin',
-            orderType:
-                lastTransaction.order_type === 'service'
-                    ? 'Service'
-                    : lastTransaction.order_type === 'pre_order'
-                      ? 'Pre-Order'
-                      : 'Direct',
-            paymentMethod: lastTransaction.payment_method?.name,
-            customer: lastTransaction.customer?.name,
-            details: (lastTransaction.details || []).map((d: any) => ({
-                name: d.product_name || d.product?.name || 'Product',
-                qty: d.quantity,
-                total: d.price * d.quantity,
-            })),
-            subtotal: lastTransaction.subtotal_amount,
-            discount: lastTransaction.discount_amount,
-            tax: lastTransaction.tax_amount,
-            total: lastTransaction.total_amount,
-            paid: lastTransaction.paid_amount,
-            change: lastTransaction.change_amount,
-            footer:
-                tenant?.settings?.receipt_footer || 'TERIMA KASIH',
-        };
-
         try {
-            const data = buildReceipt(storeData);
-            await usbPrint(data);
+            const rawData = await fetchReceiptRaw(lastTransaction.id);
+            await usbPrint(rawData);
             toast.success(
                 usbDeviceName
                     ? `Struk berhasil dikirim ke ${usbDeviceName}`
@@ -562,7 +504,31 @@ export default function POS({
         } catch (err: any) {
             toast.error(err?.message || 'Gagal mencetak via USB');
         }
-    }, [lastTransaction, tenant, webUsbSupported, usbPrint, usbDeviceName]);
+    }, [lastTransaction, webUsbSupported, usbPrint, usbDeviceName, fetchReceiptRaw]);
+
+    const handleWebBluetoothPrint = useCallback(async () => {
+        if (!lastTransaction) {
+            toast.error('Data transaksi tidak ditemukan');
+            return;
+        }
+
+        if (!webBluetoothSupported) {
+            toast.error('Web Bluetooth tidak didukung. Gunakan Chrome Android atau Chrome Desktop.');
+            return;
+        }
+
+        try {
+            const rawData = await fetchReceiptRaw(lastTransaction.id);
+            await bluetoothPrint(rawData);
+            toast.success(
+                bluetoothDeviceName
+                    ? `Struk berhasil dikirim ke ${bluetoothDeviceName}`
+                    : 'Struk berhasil dicetak',
+            );
+        } catch (err: any) {
+            toast.error(err?.message || 'Gagal mencetak via Bluetooth');
+        }
+    }, [lastTransaction, webBluetoothSupported, bluetoothPrint, bluetoothDeviceName, fetchReceiptRaw]);
 
     const categories = useMemo(() => {
         const cats = Array.from(
@@ -1745,48 +1711,13 @@ export default function POS({
                             </p>
                         </div>
                         <Button
-                            onClick={() => printToPrinter('bluetooth')}
-                            disabled={isPrinting}
+                            onClick={() => {
+                                setTimeout(() => handleReactPrint(), 100);
+                            }}
                             className="flex h-11 w-full items-center gap-2 rounded-xl bg-primary text-[13px] font-bold text-primary-foreground hover:bg-primary/90"
                         >
-                            <svg
-                                className="size-4"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                            >
-                                <path d="M6 7l6 10 6-10" />
-                                <path d="M12 17V3" />
-                            </svg>{' '}
-                            {isPrinting ? 'Mencetak...' : 'Cetak Bluetooth'}
-                        </Button>
-                        <Button
-                            onClick={() => printToPrinter('usb')}
-                            disabled={isPrinting}
-                            variant="outline"
-                            className="flex h-11 w-full items-center gap-2 rounded-xl text-[13px] font-bold"
-                        >
-                            <Receipt className="size-4" />{' '}
-                            {isPrinting ? 'Mencetak...' : 'Cetak Printer (USB)'}
-                        </Button>
-                        <Button
-                            onClick={() => printToPrinter('file')}
-                            disabled={isPrinting}
-                            variant="secondary"
-                            className="flex h-11 w-full items-center gap-2 rounded-xl text-[13px] font-bold"
-                        >
-                            <svg
-                                className="size-4"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                            >
-                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                                <polyline points="14 2 14 8 20 8" />
-                            </svg>{' '}
-                            {isPrinting ? 'Menyimpan...' : 'Simpan Struk (File)'}
+                            <Receipt className="size-4" />
+                            Print Struk
                         </Button>
                         {webUsbSupported && (
                             <Button
@@ -1802,7 +1733,13 @@ export default function POS({
                                     stroke="currentColor"
                                     strokeWidth="2"
                                 >
-                                    <rect x="2" y="3" width="20" height="14" rx="2" />
+                                    <rect
+                                        x="2"
+                                        y="3"
+                                        width="20"
+                                        height="14"
+                                        rx="2"
+                                    />
                                     <path d="M8 21h8" />
                                     <path d="M12 17v4" />
                                 </svg>{' '}
@@ -1810,7 +1747,31 @@ export default function POS({
                                     ? 'Mencetak...'
                                     : usbDeviceName
                                       ? `Cetak ke ${usbDeviceName}`
-                                      : 'Cetak Otomatis (USB)'}
+                                      : 'Cetak Langsung (USB)'}
+                            </Button>
+                        )}
+                        {webBluetoothSupported && (
+                            <Button
+                                onClick={handleWebBluetoothPrint}
+                                disabled={isWebBluetoothPrinting}
+                                variant="default"
+                                className="flex h-11 w-full items-center gap-2 rounded-xl border-2 border-sky-500 bg-sky-50 text-[13px] font-bold text-sky-700 hover:bg-sky-100"
+                            >
+                                <svg
+                                    className="size-4"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2"
+                                >
+                                    <path d="M6 7l6 10 6-10" />
+                                    <path d="M12 17V3" />
+                                </svg>{' '}
+                                {isWebBluetoothPrinting
+                                    ? 'Mencetak...'
+                                    : bluetoothDeviceName
+                                      ? `Cetak ke ${bluetoothDeviceName}`
+                                      : 'Cetak Langsung (Bluetooth)'}
                             </Button>
                         )}
                         <Button
@@ -1819,6 +1780,25 @@ export default function POS({
                         >
                             Selesai
                         </Button>
+                    </div>
+
+                    {/* ── Hidden receipt for Print Struk ── */}
+                    <div className="hidden">
+                        <ReceiptComponent
+                            ref={receiptPrintRef}
+                            transaction={lastTransaction || {}}
+                            store={
+                                tenant
+                                    ? {
+                                          name: tenant.name,
+                                          address: tenant.address,
+                                          phone: tenant.phone,
+                                          footer: tenant.settings
+                                              ?.receipt_footer,
+                                      }
+                                    : null
+                            }
+                        />
                     </div>
                 </DialogContent>
             </Dialog>

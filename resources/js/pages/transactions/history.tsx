@@ -11,14 +11,23 @@ import {
     ChevronLeft,
     ChevronRight,
     Clock,
+    Bluetooth,
+    Usb,
 } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useReactToPrint } from 'react-to-print';
+import { toast } from 'sonner';
 import { Receipt as ReceiptComponent } from '@/components/receipt';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -27,6 +36,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     Select,
     SelectContent,
@@ -42,11 +52,21 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { useBluetoothPrint } from '@/hooks/use-bluetooth-print';
+import { useReceiptData } from '@/hooks/use-receipt-data';
+import { useUsbPrint } from '@/hooks/use-usb-print';
 
 interface Customer {
     id: number;
     name: string;
     phone: string | null;
+}
+
+interface Voucher {
+    id: number;
+    code: string;
+    name: string;
+    discount: number;
 }
 
 interface Transaction {
@@ -63,12 +83,18 @@ interface Transaction {
     customer: Customer | null;
     payment_method?: { name: string } | null;
     order_type?: string;
+    table_number?: string | null;
+    voucher?: Voucher | null;
+    redeemed_points?: number;
+    point_transactions_count?: number;
     details: {
         product_name?: string;
         product: { name: string } | null;
+        variant_name?: string | null;
         quantity: number;
         price: number;
         subtotal: number;
+        notes?: string | null;
     }[];
 }
 
@@ -104,9 +130,27 @@ export default function History({ transactions, summary }: Props) {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedTransaction, setSelectedTransaction] =
         useState<Transaction | null>(null);
+    const [showDetailTransaction, setShowDetailTransaction] =
+        useState<Transaction | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [perPage, setPerPage] = useState(5);
     const receiptRef = useRef<HTMLDivElement>(null);
+
+    const {
+        print: usbPrint,
+        isSupported: webUsbSupported,
+        isPrinting: isWebUsbPrinting,
+        deviceName: usbDeviceName,
+    } = useUsbPrint();
+
+    const {
+        print: bluetoothPrint,
+        isSupported: webBluetoothSupported,
+        isPrinting: isWebBluetoothPrinting,
+        deviceName: bluetoothDeviceName,
+    } = useBluetoothPrint();
+
+    const { fetchRaw: fetchReceiptRaw } = useReceiptData();
 
     const receiptTitleRef = useRef('Struk');
 
@@ -122,6 +166,46 @@ export default function History({ transactions, summary }: Props) {
             handlePrint();
         }, 100);
     };
+
+    const handleUsbPrint = useCallback(async (id: number) => {
+        if (!webUsbSupported) {
+            toast.error('WebUSB tidak didukung. Gunakan Chrome atau Edge.');
+
+            return;
+        }
+
+        try {
+            const rawData = await fetchReceiptRaw(id);
+            await usbPrint(rawData);
+            toast.success(
+                usbDeviceName
+                    ? `Struk berhasil dikirim ke ${usbDeviceName}`
+                    : 'Struk berhasil dicetak',
+            );
+        } catch (err: any) {
+            toast.error(err?.message || 'Gagal mencetak via USB');
+        }
+    }, [webUsbSupported, usbPrint, usbDeviceName, fetchReceiptRaw]);
+
+    const handleBluetoothPrint = useCallback(async (id: number) => {
+        if (!webBluetoothSupported) {
+            toast.error('Web Bluetooth tidak didukung.');
+
+            return;
+        }
+
+        try {
+            const rawData = await fetchReceiptRaw(id);
+            await bluetoothPrint(rawData);
+            toast.success(
+                bluetoothDeviceName
+                    ? `Struk berhasil dikirim ke ${bluetoothDeviceName}`
+                    : 'Struk berhasil dicetak',
+            );
+        } catch (err: any) {
+            toast.error(err?.message || 'Gagal mencetak via Bluetooth');
+        }
+    }, [webBluetoothSupported, bluetoothPrint, bluetoothDeviceName, fetchReceiptRaw]);
 
     const fmt = (val: number) =>
         new Intl.NumberFormat('id-ID', {
@@ -351,20 +435,60 @@ export default function History({ transactions, summary }: Props) {
                                         </TableCell>
                                         <TableCell className="px-4 py-3.5">
                                             <div className="flex items-center justify-end gap-1">
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="size-8 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                                                        >
+                                                            <Printer className="size-3.5 text-muted-foreground" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-56">
+                                                        <DropdownMenuLabel className="text-[12px]">
+                                                            Cetak Struk
+                                                        </DropdownMenuLabel>
+                                                        <DropdownMenuItem
+                                                            onClick={() => printTransaction(t)}
+                                                            className="gap-2 text-[13px]"
+                                                        >
+                                                            <Printer className="size-3.5" />
+                                                            Print Struk
+                                                        </DropdownMenuItem>
+                                                        {webUsbSupported && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => handleUsbPrint(t.id)}
+                                                                disabled={isWebUsbPrinting}
+                                                                className="gap-2 text-[13px]"
+                                                            >
+                                                                <Usb className="size-3.5" />
+                                                                {isWebUsbPrinting
+                                                                    ? 'Mencetak...'
+                                                                    : 'Cetak Langsung (USB)'}
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                        {webBluetoothSupported && (
+                                                            <DropdownMenuItem
+                                                                onClick={() => handleBluetoothPrint(t.id)}
+                                                                disabled={isWebBluetoothPrinting}
+                                                                className="gap-2 text-[13px]"
+                                                            >
+                                                                <Bluetooth className="size-3.5" />
+                                                                {isWebBluetoothPrinting
+                                                                    ? 'Mencetak...'
+                                                                    : 'Cetak Langsung (Bluetooth)'}
+                                                            </DropdownMenuItem>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
                                                     className="size-8 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
                                                     onClick={() =>
-                                                        printTransaction(t)
+                                                        setShowDetailTransaction(t)
                                                     }
-                                                >
-                                                    <Printer className="size-3.5 text-muted-foreground" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="size-8 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"
                                                 >
                                                     <Eye className="size-3.5 text-muted-foreground" />
                                                 </Button>
@@ -441,6 +565,183 @@ export default function History({ transactions, summary }: Props) {
                     </div>
                 </div>
             </Card>
+
+            {/* DETAIL DIALOG */}
+            <Dialog
+                open={showDetailTransaction !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setShowDetailTransaction(null);
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-[520px]">
+                    <DialogHeader>
+                        <DialogTitle className="text-base font-bold">
+                            Detail Transaksi
+                        </DialogTitle>
+                    </DialogHeader>
+                    {showDetailTransaction && (() => {
+                        const t = showDetailTransaction;
+                        const orderTypeLabel =
+                            t.order_type === 'service'
+                                ? 'Service'
+                                : t.order_type === 'pre_order'
+                                  ? 'Pre-Order'
+                                  : 'Direct';
+
+                        return (
+                            <ScrollArea className="max-h-[75vh]">
+                                <div className="space-y-5">
+                                    {/* HEADER */}
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-lg font-bold">{t.transaction_code}</p>
+                                            <p className="text-[12px] text-muted-foreground">
+                                                {fmtDate(t.created_at)} {fmtTime(t.created_at)}
+                                            </p>
+                                        </div>
+                                        <Badge className="rounded-md border-none bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-600 shadow-none dark:bg-emerald-500/10 dark:text-emerald-400">
+                                            Paid
+                                        </Badge>
+                                    </div>
+
+                                    {/* ORDER INFO */}
+                                    <div className="grid grid-cols-2 gap-3 rounded-xl border bg-card p-3 text-[12px]">
+                                        <div>
+                                            <p className="text-muted-foreground">Kasir</p>
+                                            <p className="font-semibold">{t.user?.name ?? 'Admin'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-muted-foreground">Tipe</p>
+                                            <p className="font-semibold">{orderTypeLabel}</p>
+                                        </div>
+                                        {t.table_number && (
+                                            <div>
+                                                <p className="text-muted-foreground">Meja</p>
+                                                <p className="font-semibold">{t.table_number}</p>
+                                            </div>
+                                        )}
+                                        {t.customer && (
+                                            <div>
+                                                <p className="text-muted-foreground">Pelanggan</p>
+                                                <p className="font-semibold">
+                                                    {t.customer.name}
+                                                    {t.customer.phone && (
+                                                        <span className="ml-1 text-muted-foreground">
+                                                            ({t.customer.phone})
+                                                        </span>
+                                                    )}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* ITEMS */}
+                                    <div>
+                                        <p className="mb-2 text-[12px] font-bold text-muted-foreground uppercase tracking-wider">
+                                            Item ({t.details.length})
+                                        </p>
+                                        <div className="space-y-2">
+                                            {t.details.map((d, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="flex items-start justify-between rounded-lg border bg-card p-2.5"
+                                                >
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-[13px] font-semibold leading-tight">
+                                                            {d.product_name ?? d.product?.name ?? '-'}
+                                                        </p>
+                                                        {d.variant_name && (
+                                                            <p className="text-[11px] text-muted-foreground">
+                                                                Varian: {d.variant_name}
+                                                            </p>
+                                                        )}
+                                                        {d.notes && (
+                                                            <p className="text-[11px] italic text-muted-foreground">
+                                                                Catatan: {d.notes}
+                                                            </p>
+                                                        )}
+                                                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                                                            {d.quantity} x {fmt(d.price)}
+                                                        </p>
+                                                    </div>
+                                                    <p className="shrink-0 text-[13px] font-bold">
+                                                        {fmt(d.subtotal)}
+                                                    </p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* PAYMENT & VOUCHER */}
+                                    <div className="grid grid-cols-2 gap-3 rounded-xl border bg-card p-3 text-[12px]">
+                                        {t.payment_method && (
+                                            <div>
+                                                <p className="text-muted-foreground">Pembayaran</p>
+                                                <p className="font-semibold">{t.payment_method.name}</p>
+                                            </div>
+                                        )}
+                                        {t.voucher && (
+                                            <div>
+                                                <p className="text-muted-foreground">Voucher</p>
+                                                <p className="font-semibold">
+                                                    {t.voucher.code}
+                                                    <span className="ml-1 text-red-500">
+                                                        (-{fmt(t.voucher.discount)})
+                                                    </span>
+                                                </p>
+                                            </div>
+                                        )}
+                                        {(t.redeemed_points ?? 0) > 0 && (
+                                            <div>
+                                                <p className="text-muted-foreground">Poin Ditukar</p>
+                                                <p className="font-semibold">
+                                                    {t.redeemed_points?.toLocaleString()} pts
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* FINANCIAL SUMMARY */}
+                                    <div className="space-y-1.5 rounded-xl border bg-muted/50 p-3 text-[13px]">
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Subtotal</span>
+                                            <span>{fmt(t.subtotal_amount)}</span>
+                                        </div>
+                                        {(t.discount_amount ?? 0) > 0 && (
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">Diskon</span>
+                                                <span className="text-red-500">-{fmt(t.discount_amount)}</span>
+                                            </div>
+                                        )}
+                                        {(t.tax_amount ?? 0) > 0 && (
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">Pajak</span>
+                                                <span>{fmt(t.tax_amount)}</span>
+                                            </div>
+                                        )}
+                                        <div className="border-t pt-1.5">
+                                            <div className="flex justify-between font-bold">
+                                                <span>Total</span>
+                                                <span className="text-primary">{fmt(t.total_amount)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Tunai</span>
+                                            <span>{fmt(t.paid_amount)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Kembali</span>
+                                            <span className="font-semibold text-emerald-600">{fmt(t.change_amount)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </ScrollArea>
+                        );
+                    })()}
+                </DialogContent>
+            </Dialog>
 
             {/* HIDDEN RECEIPT FOR PRINTING */}
             {selectedTransaction && (

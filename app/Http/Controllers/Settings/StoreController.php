@@ -38,6 +38,13 @@ class StoreController extends Controller
             'point_value' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'min_redeem_points' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'receipt_footer' => ['nullable', 'string', 'max:200'],
+            'print_driver' => ['nullable', 'string', 'in:file,usb,bluetooth,network,windows'],
+            'print_usb_printer' => ['nullable', 'string', 'max:255'],
+            'print_bluetooth_device' => ['nullable', 'string', 'max:255'],
+            'print_bluetooth_mac' => ['nullable', 'string', 'max:255'],
+            'print_network_host' => ['nullable', 'string', 'max:255'],
+            'print_network_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
+            'print_windows_printer' => ['nullable', 'string', 'max:255'],
         ]);
 
         $tenant->name = $validated['name'];
@@ -60,6 +67,25 @@ class StoreController extends Controller
             'point_value' => (int) ($validated['point_value'] ?? 100),
             'min_redeem_points' => (int) ($validated['min_redeem_points'] ?? 100),
             'receipt_footer' => $validated['receipt_footer'] ?? 'TERIMA KASIH',
+            'printing' => [
+                'driver' => $validated['print_driver'] ?? 'file',
+                'connectors' => [
+                    'usb' => [
+                        'printer' => $validated['print_usb_printer'] ?? '',
+                    ],
+                    'bluetooth' => [
+                        'device' => $validated['print_bluetooth_device'] ?? '',
+                        'mac' => $validated['print_bluetooth_mac'] ?? '',
+                    ],
+                    'network' => [
+                        'host' => $validated['print_network_host'] ?? '127.0.0.1',
+                        'port' => (int) ($validated['print_network_port'] ?? 9100),
+                    ],
+                    'windows' => [
+                        'printer' => $validated['print_windows_printer'] ?? '',
+                    ],
+                ],
+            ],
         ]);
         $tenant->settings = $settings;
 

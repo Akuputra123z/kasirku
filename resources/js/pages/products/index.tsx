@@ -104,7 +104,9 @@ export default function Index({ products, categories, filters }: Props) {
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState(filters?.search ?? '');
     const [categorySearch, setCategorySearch] = useState('');
-    const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
+    const [rowSelection, setRowSelection] = useState<Record<string, boolean>>(
+        {},
+    );
     const [confirmDialog, setConfirmDialog] = useState<{
         open: boolean;
         action: 'delete' | 'bulk-delete';
@@ -251,7 +253,7 @@ export default function Index({ products, categories, filters }: Props) {
         setConfirmDialog({ open: true, action: 'bulk-delete', loading: false });
     };
 
-  const handleConfirmDelete = () => {
+    const handleConfirmDelete = () => {
         setConfirmDialog((prev) => ({ ...prev, loading: true }));
 
         if (confirmDialog.action === 'delete' && confirmDialog.productId) {
@@ -271,7 +273,8 @@ export default function Index({ products, categories, filters }: Props) {
                         loading: false,
                     });
                 },
-                onFinish: () => setConfirmDialog((prev) => ({ ...prev, loading: false })),
+                onFinish: () =>
+                    setConfirmDialog((prev) => ({ ...prev, loading: false })),
             });
         } else {
             // 🛠️ FIX: Mengubah rute menjadi 'products.bulkDestroy' agar sesuai dengan backend Laravel
@@ -295,9 +298,16 @@ export default function Index({ products, categories, filters }: Props) {
                             action: 'bulk-delete', // 🛠️ Disamakan dengan action aslinya
                             loading: false,
                         });
-                        toast.error(Object.values(err)[0] as string || 'Gagal menghapus produk massal.');
+                        toast.error(
+                            (Object.values(err)[0] as string) ||
+                                'Gagal menghapus produk massal.',
+                        );
                     },
-                    onFinish: () => setConfirmDialog((prev) => ({ ...prev, loading: false })),
+                    onFinish: () =>
+                        setConfirmDialog((prev) => ({
+                            ...prev,
+                            loading: false,
+                        })),
                 },
             );
         }

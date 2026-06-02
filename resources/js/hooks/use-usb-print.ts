@@ -14,8 +14,7 @@ export function useUsbPrint(): UseUsbPrintResult {
     const [deviceName, setDeviceName] = useState<string | null>(null);
     const deviceRef = useRef<USBDevice | null>(null);
 
-    const isSupported =
-        typeof navigator !== 'undefined' && 'usb' in navigator;
+    const isSupported = typeof navigator !== 'undefined' && 'usb' in navigator;
 
     const print = useCallback(
         async (data: Uint8Array) => {
@@ -40,9 +39,7 @@ export function useUsbPrint(): UseUsbPrintResult {
                     });
 
                     deviceRef.current = device;
-                    setDeviceName(
-                        device.productName || 'USB Printer',
-                    );
+                    setDeviceName(device.productName || 'USB Printer');
                 }
 
                 await device.open();
@@ -55,8 +52,7 @@ export function useUsbPrint(): UseUsbPrintResult {
                     const alt = iface.alternate;
                     const hasBulkOut = alt.endpoints.some(
                         (ep: USBEndpoint) =>
-                            ep.direction === 'out' &&
-                            ep.type === 'bulk',
+                            ep.direction === 'out' && ep.type === 'bulk',
                     );
                     if (hasBulkOut) {
                         try {
@@ -76,9 +72,7 @@ export function useUsbPrint(): UseUsbPrintResult {
                 if (!endpoint) {
                     for (const iface of device.configuration!.interfaces) {
                         try {
-                            await device.claimInterface(
-                                iface.interfaceNumber,
-                            );
+                            await device.claimInterface(iface.interfaceNumber);
                             const ep = iface.alternate.endpoints.find(
                                 (ep: USBEndpoint) => ep.direction === 'out',
                             );
@@ -98,16 +92,17 @@ export function useUsbPrint(): UseUsbPrintResult {
                     );
                 }
 
-                await device.transferOut(endpoint.endpointNumber, data.buffer as ArrayBuffer);
+                await device.transferOut(
+                    endpoint.endpointNumber,
+                    data.buffer as ArrayBuffer,
+                );
 
                 await new Promise((r) => setTimeout(r, 1000));
                 device.close();
             } catch (err: any) {
                 deviceRef.current = null;
                 setDeviceName(null);
-                throw new Error(
-                    err?.message || 'Gagal mencetak via USB.',
-                );
+                throw new Error(err?.message || 'Gagal mencetak via USB.');
             } finally {
                 setIsPrinting(false);
             }

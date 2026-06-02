@@ -28,12 +28,21 @@
 
             html.dark {
                 background-color: oklch(0.145 0 0);
-            }
+            }   
         </style>
 
         <link rel="icon" href="/favicon.ico" sizes="any">
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
+        {{-- Open Graph / Social Share --}}
+        <meta property="og:title" content="{{ config('app.name') }}" />
+        <meta property="og:description" content="Solusi POS digital paling simpel untuk UMKM. Catat transaksi, kelola stok, dan terima pembayaran QRIS." />
+        <meta property="og:image" content="{{ asset('og-image.png') }}" />
+        <meta property="og:url" content="{{ url()->current() }}" />
+        <meta property="og:type" content="website" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="description" content="Solusi POS digital paling simpel untuk UMKM." />
 
         @fonts
 

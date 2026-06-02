@@ -99,6 +99,7 @@ Route::middleware(['web', 'tenant.from-user'])->group(function () {
         Route::delete('roles/{role}', [RoleController::class, 'destroy'])->name('roles.destroy')->middleware('permission:manage-users');
 
         Route::post('print/receipt/{transaction}', [PrintController::class, 'receipt'])->name('print.receipt');
+        Route::post('print/receipt/{transaction}/raw', [PrintController::class, 'raw'])->name('print.raw');
         Route::post('print/test', [PrintController::class, 'test'])->name('print.test');
 
         Route::get('users', [UserController::class, 'index'])->name('users.index')->middleware('permission:manage-users');

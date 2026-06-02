@@ -73,12 +73,14 @@ export function ImportDialog({
         e.preventDefault();
         setIsDragging(false);
         const droppedFile = e.dataTransfer.files[0];
-        
+
         if (isValidFile(droppedFile)) {
             setFile(droppedFile);
             setResult(null);
         } else {
-            toast.error('Hanya file Excel (.xlsx, .xls) atau CSV yang didukung.');
+            toast.error(
+                'Hanya file Excel (.xlsx, .xls) atau CSV yang didukung.',
+            );
         }
     };
 
@@ -89,7 +91,9 @@ export function ImportDialog({
                 setFile(selectedFile);
                 setResult(null);
             } else {
-                toast.error('Hanya file Excel (.xlsx, .xls) atau CSV yang didukung.');
+                toast.error(
+                    'Hanya file Excel (.xlsx, .xls) atau CSV yang didukung.',
+                );
                 if (fileInputRef.current) fileInputRef.current.value = '';
             }
         }
@@ -109,15 +113,19 @@ export function ImportDialog({
             preserveScroll: true,
             onSuccess: (page) => {
                 // Mengambil flash object dari props Inertia
-                const importResult = page.props.flash?.import as ImportResult | undefined;
-                
+                const importResult = page.props.flash?.import as
+                    | ImportResult
+                    | undefined;
+
                 if (importResult) {
                     setResult(importResult);
                     if (Number(importResult.errors?.length ?? 0) === 0) {
-                        toast.success(`${importResult.imported} data berhasil diimport.`);
+                        toast.success(
+                            `${importResult.imported} data berhasil diimport.`,
+                        );
                     } else {
                         toast.warning(
-                            `${importResult.imported} berhasil, ${importResult.errors.length} gagal.`
+                            `${importResult.imported} berhasil, ${importResult.errors.length} gagal.`,
                         );
                     }
                 } else {
@@ -129,7 +137,9 @@ export function ImportDialog({
             },
             onError: (errors) => {
                 // Membaca error validasi Laravel jika ada (misal validasi 'file' => 'required|mimes:xlsx')
-                const errorMsg = Object.values(errors).join(', ') || 'Gagal mengimport file. Periksa format Excel atau CSV.';
+                const errorMsg =
+                    Object.values(errors).join(', ') ||
+                    'Gagal mengimport file. Periksa format Excel atau CSV.';
                 toast.error(errorMsg);
                 setIsImporting(false);
             },
@@ -140,7 +150,10 @@ export function ImportDialog({
         const link = document.createElement('a');
         link.href = templateUrl;
         // Opsional: memaksa browser mendownload daripada membukanya di tab baru
-        link.setAttribute('download', templateUrl.split('/').pop() || 'template'); 
+        link.setAttribute(
+            'download',
+            templateUrl.split('/').pop() || 'template',
+        );
         link.click();
     };
 
@@ -250,9 +263,11 @@ export function ImportDialog({
                                             onClick={(e) => {
                                                 e.stopPropagation(); // 🛠️ Mencegah file explorer terbuka kembali saat klik hapus
                                                 setFile(null);
-                                                if (fileInputRef.current) fileInputRef.current.value = '';
+                                                if (fileInputRef.current)
+                                                    fileInputRef.current.value =
+                                                        '';
                                             }}
-                                            className="text-xs text-red-500 hover:text-red-600 relative z-10"
+                                            className="relative z-10 text-xs text-red-500 hover:text-red-600"
                                         >
                                             Hapus file
                                         </Button>

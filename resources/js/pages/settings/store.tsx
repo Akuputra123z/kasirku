@@ -25,6 +25,13 @@ export default function StoreSettings() {
         logo: File | null;
         color_theme: ColorTheme;
         receipt_footer: string;
+        print_driver: string;
+        print_usb_printer: string;
+        print_bluetooth_device: string;
+        print_bluetooth_mac: string;
+        print_network_host: string;
+        print_network_port: number;
+        print_windows_printer: string;
         _method: 'PATCH';
     }>({
         name: tenant?.name ?? '',
@@ -32,7 +39,26 @@ export default function StoreSettings() {
         phone: tenant?.phone ?? '',
         logo: null,
         color_theme: currentTheme,
-        receipt_footer: (tenant as any)?.settings?.receipt_footer ?? 'TERIMA KASIH',
+        receipt_footer:
+            (tenant as any)?.settings?.receipt_footer ?? 'TERIMA KASIH',
+        print_driver: (tenant as any)?.settings?.printing?.driver ?? 'file',
+        print_usb_printer:
+            (tenant as any)?.settings?.printing?.connectors?.usb?.printer ?? '',
+        print_bluetooth_device:
+            (tenant as any)?.settings?.printing?.connectors?.bluetooth
+                ?.device ?? '',
+        print_bluetooth_mac:
+            (tenant as any)?.settings?.printing?.connectors?.bluetooth?.mac ??
+            '',
+        print_network_host:
+            (tenant as any)?.settings?.printing?.connectors?.network?.host ??
+            '127.0.0.1',
+        print_network_port:
+            (tenant as any)?.settings?.printing?.connectors?.network?.port ??
+            9100,
+        print_windows_printer:
+            (tenant as any)?.settings?.printing?.connectors?.windows?.printer ??
+            '',
         _method: 'PATCH',
     });
 
@@ -131,6 +157,212 @@ export default function StoreSettings() {
                             Appears at the bottom of printed receipts
                         </p>
                         <InputError message={errors.receipt_footer} />
+                    </div>
+
+                    <div className="border-t border-neutral-200 pt-6 dark:border-neutral-800">
+                        <div className="mb-4 flex items-center gap-2">
+                            <Icon
+                                icon="solar:printer-bold-duotone"
+                                className="size-5 text-neutral-400"
+                            />
+                            <Label className="text-[12px] font-bold tracking-widest text-neutral-500 uppercase">
+                                Thermal Printer Settings
+                            </Label>
+                        </div>
+
+                        <div className="grid gap-6">
+                            <div className="grid gap-2">
+                                <Label htmlFor="print_driver">
+                                    Printer Driver
+                                </Label>
+                                <select
+                                    id="print_driver"
+                                    value={data.print_driver}
+                                    onChange={(e) =>
+                                        setData('print_driver', e.target.value)
+                                    }
+                                    className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-800 dark:bg-neutral-950 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+                                >
+                                    <option value="file">
+                                        Save to File (.bin)
+                                    </option>
+                                    <option value="usb">
+                                        USB Printer (CUPS / lp)
+                                    </option>
+                                    <option value="bluetooth">
+                                        Bluetooth Printer (Serial / Python)
+                                    </option>
+                                    <option value="network">
+                                        Network Printer (TCP Socket)
+                                    </option>
+                                    <option value="windows">
+                                        Windows Shared Printer (SMB)
+                                    </option>
+                                </select>
+                                <p className="text-[11px] font-medium text-neutral-400">
+                                    Select the default printer driver for
+                                    receipt printing.
+                                </p>
+                                <InputError message={errors.print_driver} />
+                            </div>
+
+                            {data.print_driver === 'usb' && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="print_usb_printer">
+                                        USB Printer Name (CUPS)
+                                    </Label>
+                                    <Input
+                                        id="print_usb_printer"
+                                        value={data.print_usb_printer}
+                                        onChange={(e) =>
+                                            setData(
+                                                'print_usb_printer',
+                                                e.target.value,
+                                            )
+                                        }
+                                        placeholder="e.g. STMicroelectronics_58Printer or POS-58"
+                                    />
+                                    <p className="text-[11px] font-medium text-neutral-400">
+                                        The printer queue name registered in the
+                                        CUPS system (macOS/Linux).
+                                    </p>
+                                    <InputError
+                                        message={errors.print_usb_printer}
+                                    />
+                                </div>
+                            )}
+
+                            {data.print_driver === 'bluetooth' && (
+                                <div className="grid gap-6 sm:grid-cols-2">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="print_bluetooth_device">
+                                            Bluetooth Serial Port
+                                        </Label>
+                                        <Input
+                                            id="print_bluetooth_device"
+                                            value={data.print_bluetooth_device}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'print_bluetooth_device',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="e.g. /dev/cu.RPP02N or /dev/rfcomm0"
+                                        />
+                                        <p className="text-[11px] font-medium text-neutral-400">
+                                            The serial device path for the
+                                            Bluetooth printer.
+                                        </p>
+                                        <InputError
+                                            message={
+                                                errors.print_bluetooth_device
+                                            }
+                                        />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="print_bluetooth_mac">
+                                            Bluetooth MAC Address (Optional)
+                                        </Label>
+                                        <Input
+                                            id="print_bluetooth_mac"
+                                            value={data.print_bluetooth_mac}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'print_bluetooth_mac',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="e.g. 00:11:22:33:44:55"
+                                        />
+                                        <p className="text-[11px] font-medium text-neutral-400">
+                                            MAC Address of the Bluetooth
+                                            printer.
+                                        </p>
+                                        <InputError
+                                            message={errors.print_bluetooth_mac}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {data.print_driver === 'network' && (
+                                <div className="grid gap-6 sm:grid-cols-2">
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="print_network_host">
+                                            Printer IP / Host
+                                        </Label>
+                                        <Input
+                                            id="print_network_host"
+                                            value={data.print_network_host}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'print_network_host',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="e.g. 192.168.1.100"
+                                        />
+                                        <p className="text-[11px] font-medium text-neutral-400">
+                                            IP address of the network printer.
+                                        </p>
+                                        <InputError
+                                            message={errors.print_network_host}
+                                        />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="print_network_port">
+                                            Network Port
+                                        </Label>
+                                        <Input
+                                            id="print_network_port"
+                                            type="number"
+                                            value={data.print_network_port}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'print_network_port',
+                                                    parseInt(e.target.value) ||
+                                                        9100,
+                                                )
+                                            }
+                                            placeholder="9100"
+                                        />
+                                        <p className="text-[11px] font-medium text-neutral-400">
+                                            The network port of the printer
+                                            (default: 9100).
+                                        </p>
+                                        <InputError
+                                            message={errors.print_network_port}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {data.print_driver === 'windows' && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="print_windows_printer">
+                                        Windows Shared Printer Path
+                                    </Label>
+                                    <Input
+                                        id="print_windows_printer"
+                                        value={data.print_windows_printer}
+                                        onChange={(e) =>
+                                            setData(
+                                                'print_windows_printer',
+                                                e.target.value,
+                                            )
+                                        }
+                                        placeholder="e.g. //ComputerName/SharedPrinterName"
+                                    />
+                                    <p className="text-[11px] font-medium text-neutral-400">
+                                        SMB network share path for the printer
+                                        in Windows.
+                                    </p>
+                                    <InputError
+                                        message={errors.print_windows_printer}
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     <div className="border-t border-neutral-200 pt-6 dark:border-neutral-800">

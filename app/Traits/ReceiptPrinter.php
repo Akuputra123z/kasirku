@@ -204,6 +204,7 @@ trait ReceiptPrinter
 
         $printer->feed(3);
         $printer->cut();
+        $printer->pulse();
         $printer->close();
     }
 

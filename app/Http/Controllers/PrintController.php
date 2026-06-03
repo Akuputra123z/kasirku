@@ -196,6 +196,7 @@ class PrintController extends Controller
             $printer->text("Jika Anda melihat ini, printer berfungsi.\n");
             $printer->feed(2);
             $printer->cut();
+            $printer->pulse();
             $printer->close();
 
             return response()->json(['success' => true, 'message' => 'Test print successful']);

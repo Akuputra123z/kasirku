@@ -36,14 +36,14 @@ class ProductController extends Controller
                 ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', "%{$s}%"))
             )
             ->latest()
-            ->paginate(10)
+            ->paginate((int) $request->get('per_page', 10))
             ->withQueryString();
 
         return Inertia::render('products/index', [
             'products' => $products,
             'categories' => Category::select('id', 'name')->get(),
             'brands' => Brand::select('id', 'name')->get(),
-            'filters' => ['search' => $search],
+            'filters' => ['search' => $search, 'per_page' => (int) $request->get('per_page', 10)],
         ]);
     }
 

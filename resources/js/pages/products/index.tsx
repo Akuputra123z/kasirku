@@ -14,8 +14,6 @@ import {
     ArrowLeft,
     ChevronLeft,
     ChevronRight,
-    ChevronsLeft,
-    ChevronsRight,
     Trash2,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -94,7 +92,7 @@ interface Paginator<T> {
 interface Props {
     products: Paginator<Product>;
     categories: Category[];
-    filters: { search?: string };
+    filters: { search?: string; per_page?: number };
 }
 
 export default function Index({ products, categories, filters }: Props) {
@@ -103,6 +101,7 @@ export default function Index({ products, categories, filters }: Props) {
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState(filters?.search ?? '');
+    const [perPage, setPerPage] = useState(products.per_page ?? 10);
     const [categorySearch, setCategorySearch] = useState('');
     const [rowSelection, setRowSelection] = useState<Record<string, boolean>>(
         {},
@@ -327,16 +326,25 @@ export default function Index({ products, categories, filters }: Props) {
         searchTimeoutRef.current = setTimeout(() => {
             router.get(
                 '/products',
-                { search: value || null },
+                { search: value || null, per_page: perPage },
                 { preserveState: true, replace: true },
             );
         }, 300);
-    }, []);
+    }, [perPage]);
 
     const goToPage = (page: number) => {
         router.get(
             '/products',
-            { page, search: searchQuery },
+            { page, search: searchQuery, per_page: perPage },
+            { preserveState: true },
+        );
+    };
+
+    const handlePageSizeChange = (newPerPage: number) => {
+        setPerPage(newPerPage);
+        router.get(
+            '/products',
+            { page: 1, search: searchQuery, per_page: newPerPage },
             { preserveState: true },
         );
     };
@@ -604,51 +612,60 @@ export default function Index({ products, categories, filters }: Props) {
                 data={products.data}
                 rowSelection={rowSelection}
                 onRowSelectionChange={setRowSelection}
+                hidePaginationControls={true}
             />
 
-            {products.last_page > 1 && (
-                <div className="flex items-center justify-center gap-1.5">
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="size-8"
-                        onClick={() => goToPage(1)}
-                        disabled={products.current_page === 1}
+            <div className="flex items-center justify-between border-t border-neutral-100 px-2 pt-4 dark:border-neutral-800">
+                <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                    <span>Show</span>
+                    <Select
+                        value={perPage.toString()}
+                        onValueChange={(v) => handlePageSizeChange(Number(v))}
                     >
-                        <ChevronsLeft className="size-4" />
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="size-8"
-                        onClick={() => goToPage(products.current_page - 1)}
-                        disabled={products.current_page === 1}
-                    >
-                        <ChevronLeft className="size-4" />
-                    </Button>
-                    <span className="min-w-[80px] text-center text-[13px] text-muted-foreground">
-                        {products.current_page} / {products.last_page}
-                    </span>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="size-8"
-                        onClick={() => goToPage(products.current_page + 1)}
-                        disabled={products.current_page === products.last_page}
-                    >
-                        <ChevronRight className="size-4" />
-                    </Button>
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="size-8"
-                        onClick={() => goToPage(products.last_page)}
-                        disabled={products.current_page === products.last_page}
-                    >
-                        <ChevronsRight className="size-4" />
-                    </Button>
+                        <SelectTrigger className="h-8 w-16 rounded-lg bg-transparent text-[12px] border-neutral-200 dark:border-neutral-800">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent side="top" className="border-neutral-200 dark:border-neutral-800 rounded-xl">
+                            <SelectItem value="10">10</SelectItem>
+                            <SelectItem value="20">20</SelectItem>
+                            <SelectItem value="30">30</SelectItem>
+                            <SelectItem value="40">40</SelectItem>
+                            <SelectItem value="50">50</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <span>per page</span>
                 </div>
-            )}
+                <div className="flex items-center gap-2">
+                    <span className="text-[12px] text-muted-foreground">
+                        {(products.current_page - 1) * products.per_page + 1}-
+                        {Math.min(products.current_page * products.per_page, products.total)} of{' '}
+                        {products.total}
+                    </span>
+                    <div className="flex items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 rounded-lg"
+                            disabled={products.current_page === 1}
+                            onClick={() => goToPage(products.current_page - 1)}
+                        >
+                            <ChevronLeft className="size-4" />
+                        </Button>
+                        <span className="px-2 text-[12px] font-bold">
+                            {products.current_page}
+                        </span>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 rounded-lg"
+                            disabled={products.current_page >= products.last_page}
+                            onClick={() => goToPage(products.current_page + 1)}
+                        >
+                            <ChevronRight className="size-4" />
+                        </Button>
+                    </div>
+                </div>
+            </div>
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="flex max-h-[95vh] flex-col overflow-hidden rounded-[2.5rem] border-none bg-white p-0 shadow-2xl sm:max-w-[800px] dark:bg-neutral-950">

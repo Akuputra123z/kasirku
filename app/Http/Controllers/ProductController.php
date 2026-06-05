@@ -298,16 +298,38 @@ class ProductController extends Controller
                 continue;
             }
 
-            Product::create([
+            $barcode = $rowData['barcode'] ?? null;
+
+            if (! blank($barcode)) {
+                $existing = Product::query()
+                    ->where('barcode', $barcode)
+                    ->exists();
+
+                if ($existing) {
+                    $errors[] = "Baris {$rowNumber}: Barcode '{$barcode}' sudah digunakan.";
+
+                    continue;
+                }
+            }
+
+            $product = Product::create([
                 'name' => $rowData['name'],
                 'description' => $rowData['description'] ?? null,
                 'price' => (float) $rowData['price'],
+                'cost_price' => ! blank($rowData['cost_price'] ?? null) ? (float) $rowData['cost_price'] : null,
                 'stock' => (int) ($rowData['stock'] ?? 0),
-                'barcode' => $rowData['barcode'] ?? null,
+                'barcode' => $barcode,
                 'category_id' => $category?->id,
                 'brand_id' => $brand?->id,
                 'status' => $status,
             ]);
+
+            if (blank($barcode)) {
+                $product->barcode = 'BRC-'.$product->tenant_id.'-'.$product->id;
+                $product->save();
+            }
+
+            BarcodeService::bust($product->barcode);
 
             $imported++;
         }

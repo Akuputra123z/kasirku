@@ -17,6 +17,7 @@ class ProductTemplateExport implements FromArray, WithHeadings
             'description',
             'price',
             'stock',
+            'barcode',
             'category',
             'brand',
             'status',
@@ -34,8 +35,9 @@ class ProductTemplateExport implements FromArray, WithHeadings
                 'Minuman teh botol 350ml',
                 5000,
                 100,
+                '8991234567890',
                 'Minuman Ringan',
-                '', // Diisi kosong jika produk belum memiliki brand resmi
+                '',
                 'active',
             ],
             [
@@ -43,6 +45,7 @@ class ProductTemplateExport implements FromArray, WithHeadings
                 'Keripik singkong original 200gr',
                 3500,
                 50,
+                '',
                 'Makanan Ringan',
                 '',
                 'active',

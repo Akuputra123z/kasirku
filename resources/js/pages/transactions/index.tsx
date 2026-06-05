@@ -43,6 +43,8 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import VisuallyHidden from '@/components/ui/visually-hidden';
+import { useBarcodeScanner } from '@/hooks/use-barcode-scanner';
+import { useBeep } from '@/hooks/use-beep';
 import { useBluetoothPrint } from '@/hooks/use-bluetooth-print';
 import { useReceiptData } from '@/hooks/use-receipt-data';
 import { useUsbPrint } from '@/hooks/use-usb-print';
@@ -62,6 +64,7 @@ interface Product {
     stock: number;
     image: string | null;
     description?: string;
+    barcode?: string | null;
     category: { name: string };
     variants?: ProductVariant[];
 }
@@ -369,9 +372,21 @@ export default function POS({
         deviceName: bluetoothDeviceName,
     } = useBluetoothPrint();
 
+    const { beep } = useBeep();
+
     const { fetchRaw: fetchReceiptRaw } = useReceiptData();
 
     const receiptPrintRef = useRef<HTMLDivElement>(null);
+    const barcodeCacheRef = useRef(new Map<string, Product>());
+
+    useEffect(() => {
+        for (const product of products) {
+            if (product.barcode) {
+                barcodeCacheRef.current.set(product.barcode, product);
+            }
+        }
+    }, [products]);
+
     const handleReactPrint = useReactToPrint({
         contentRef: receiptPrintRef,
         documentTitle: () => lastTransaction?.transaction_code || 'Struk',
@@ -412,8 +427,13 @@ export default function POS({
 
     const handleCreateCustomer = async () => {
         const name = customerSearch.trim();
-        if (!name) return;
+
+        if (!name) {
+            return;
+        }
+
         setIsCreatingCustomer(true);
+
         try {
             const token =
                 document
@@ -428,7 +448,11 @@ export default function POS({
                 },
                 body: JSON.stringify({ name, phone: '' }),
             });
-            if (!res.ok) throw new Error('Gagal membuat pelanggan');
+
+            if (!res.ok) {
+                throw new Error('Gagal membuat pelanggan');
+            }
+
             const newCustomer: Customer = await res.json();
             setLocalCustomers((prev) => [...prev, newCustomer]);
             setSelectedCustomer(newCustomer);
@@ -485,11 +509,13 @@ export default function POS({
     const handleWebUsbPrint = useCallback(async () => {
         if (!lastTransaction) {
             toast.error('Data transaksi tidak ditemukan');
+
             return;
         }
 
         if (!webUsbSupported) {
             toast.error('WebUSB tidak didukung. Gunakan Chrome atau Edge.');
+
             return;
         }
 
@@ -504,16 +530,26 @@ export default function POS({
         } catch (err: any) {
             toast.error(err?.message || 'Gagal mencetak via USB');
         }
-    }, [lastTransaction, webUsbSupported, usbPrint, usbDeviceName, fetchReceiptRaw]);
+    }, [
+        lastTransaction,
+        webUsbSupported,
+        usbPrint,
+        usbDeviceName,
+        fetchReceiptRaw,
+    ]);
 
     const handleWebBluetoothPrint = useCallback(async () => {
         if (!lastTransaction) {
             toast.error('Data transaksi tidak ditemukan');
+
             return;
         }
 
         if (!webBluetoothSupported) {
-            toast.error('Web Bluetooth tidak didukung. Gunakan Chrome Android atau Chrome Desktop.');
+            toast.error(
+                'Web Bluetooth tidak didukung. Gunakan Chrome Android atau Chrome Desktop.',
+            );
+
             return;
         }
 
@@ -528,7 +564,13 @@ export default function POS({
         } catch (err: any) {
             toast.error(err?.message || 'Gagal mencetak via Bluetooth');
         }
-    }, [lastTransaction, webBluetoothSupported, bluetoothPrint, bluetoothDeviceName, fetchReceiptRaw]);
+    }, [
+        lastTransaction,
+        webBluetoothSupported,
+        bluetoothPrint,
+        bluetoothDeviceName,
+        fetchReceiptRaw,
+    ]);
 
     const categories = useMemo(() => {
         const cats = Array.from(
@@ -757,6 +799,54 @@ export default function POS({
         );
     };
 
+    // ── Barcode Scanner ──────────────────────────────────────────────────────
+
+    const handleBarcodeScanned = useCallback(
+        async (barcode: string) => {
+            const cached = barcodeCacheRef.current.get(barcode);
+
+            if (cached) {
+                addToCart(cached, 1);
+                beep('success');
+
+                return;
+            }
+
+            try {
+                const res = await fetch(
+                    `/pos/scan/${encodeURIComponent(barcode)}`,
+                );
+
+                if (!res.ok) {
+                    if (res.status === 429) {
+                        toast.error('Terlalu cepat, tunggu sesaat');
+                    } else {
+                        beep('error');
+                        toast.error(`Barcode "${barcode}" tidak ditemukan`);
+                    }
+
+                    return;
+                }
+
+                const data = await res.json();
+                const product = data.product as Product;
+
+                barcodeCacheRef.current.set(barcode, product);
+                addToCart(product, 1);
+                beep('success');
+            } catch {
+                beep('error');
+                toast.error('Gagal menghubungi server');
+            }
+        },
+        [addToCart, beep],
+    );
+
+    useBarcodeScanner({
+        onScan: handleBarcodeScanned,
+        enabled: true,
+    });
+
     // ─────────────────────────────────────────────────────────────────────────
 
     return (
@@ -799,9 +889,13 @@ export default function POS({
                                         setExpandedProductId(null);
                                     }}
                                     placeholder="Cari produk atau kategori..."
-                                    className="h-10 w-full rounded-xl border border-border bg-background pr-4 pl-9 text-[16px] transition-all outline-none placeholder:text-muted-foreground/60 focus:border-primary focus:ring-1 focus:ring-primary md:text-[13px]"
+                                    className="h-10 w-full rounded-xl border border-border bg-background pr-20 pl-9 text-[16px] transition-all outline-none placeholder:text-muted-foreground/60 focus:border-primary focus:ring-1 focus:ring-primary md:text-[13px]"
                                     autoComplete="off"
                                 />
+                                <div className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 rounded-md bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                                    <div className="size-1.5 animate-pulse rounded-full bg-green-600 dark:bg-green-400" />
+                                    SCAN
+                                </div>
                             </div>
 
                             <div className="mb-4 flex items-center justify-between">

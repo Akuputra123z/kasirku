@@ -118,26 +118,34 @@ interface Props {
 }
 
 const stockLevel = (stock: number) => {
-    if (stock <= 0)
+    if (stock <= 0) {
         return {
             label: 'Habis',
             class: 'text-red-600 bg-red-50 dark:bg-red-950/30',
         };
-    if (stock <= 5)
+    }
+
+    if (stock <= 5) {
         return {
             label: 'Kritis',
             class: 'text-orange-600 bg-orange-50 dark:bg-orange-950/30',
         };
-    if (stock <= 20)
+    }
+
+    if (stock <= 20) {
         return {
             label: 'Rendah',
             class: 'text-amber-600 bg-amber-50 dark:bg-amber-950/30',
         };
-    if (stock <= 50)
+    }
+
+    if (stock <= 50) {
         return {
             label: 'Sedang',
             class: 'text-blue-600 bg-blue-50 dark:bg-blue-950/30',
         };
+    }
+
     return {
         label: 'Aman',
         class: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30',
@@ -151,6 +159,7 @@ const statusBadge = (status: string) => {
         received:
             'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:border-emerald-800',
     };
+
     return variants[status] || 'bg-neutral-100 text-neutral-600';
 };
 
@@ -159,6 +168,7 @@ const statusLabel = (status: string) => {
         pending: 'Pending',
         received: 'Diterima',
     };
+
     return labels[status] || status;
 };
 
@@ -213,8 +223,11 @@ export default function Index({
     const debouncedSearch = useCallback(
         (value: string) => {
             setSearchQuery(value);
-            if (searchTimeoutRef.current)
+
+            if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
+            }
+
             searchTimeoutRef.current = setTimeout(() => {
                 applyFilters({ search: value || null });
             }, 300);
@@ -224,8 +237,9 @@ export default function Index({
 
     useEffect(
         () => () => {
-            if (searchTimeoutRef.current)
+            if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
+            }
         },
         [],
     );
@@ -260,7 +274,10 @@ export default function Index({
     };
 
     const removeItem = (idx: number) => {
-        if (data.items.length <= 1) return;
+        if (data.items.length <= 1) {
+            return;
+        }
+
         setData(
             'items',
             data.items.filter((_, i) => i !== idx),
@@ -298,7 +315,10 @@ export default function Index({
     };
 
     const confirmReceive = () => {
-        if (!receivePo) return;
+        if (!receivePo) {
+            return;
+        }
+
         router.post(
             `/purchase-orders/${receivePo.id}/receive`,
             {},
@@ -314,7 +334,10 @@ export default function Index({
     };
 
     const confirmDelete = () => {
-        if (!deleteId) return;
+        if (!deleteId) {
+            return;
+        }
+
         router.delete(`/purchase-orders/${deleteId}`, {
             onSuccess: () => {
                 toast.success('Purchase order berhasil dihapus');
@@ -342,8 +365,10 @@ export default function Index({
     );
 
     const SortIcon = ({ field }: { field: string }) => {
-        if (sortField !== field)
+        if (sortField !== field) {
             return <ArrowUpDown className="ml-1 size-3 opacity-30" />;
+        }
+
         return sortDir === 'desc' ? (
             <ArrowDown className="ml-1 size-3" />
         ) : (
@@ -730,6 +755,7 @@ export default function Index({
                 open={isCreateOpen}
                 onOpenChange={(open) => {
                     setIsCreateOpen(open);
+
                     if (!open) {
                         reset();
                         setRawPrices({});
@@ -965,8 +991,11 @@ export default function Index({
                                                     onBlur={() => {
                                                         const raw =
                                                             rawPrices[idx];
-                                                        if (raw === undefined)
+
+                                                        if (raw === undefined) {
                                                             return;
+                                                        }
+
                                                         const cleaned =
                                                             raw.replace(
                                                                 /[^0-9.]/g,
@@ -989,6 +1018,7 @@ export default function Index({
                                                                 ...prev,
                                                             };
                                                             delete next[idx];
+
                                                             return next;
                                                         });
                                                     }}
@@ -1124,7 +1154,9 @@ export default function Index({
             <Dialog
                 open={!!deleteId}
                 onOpenChange={(open) => {
-                    if (!open) setDeleteId(null);
+                    if (!open) {
+                        setDeleteId(null);
+                    }
                 }}
             >
                 <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[425px]">

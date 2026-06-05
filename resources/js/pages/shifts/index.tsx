@@ -228,7 +228,11 @@ export default function ShiftsIndex() {
 
     const debouncedSearch = useCallback((value: string) => {
         setSearchInput(value);
-        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
         searchTimeoutRef.current = setTimeout(() => {
             setSearchQuery(value);
             setCurrentPage(1);
@@ -237,8 +241,9 @@ export default function ShiftsIndex() {
 
     useEffect(
         () => () => {
-            if (searchTimeoutRef.current)
+            if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
+            }
         },
         [],
     );

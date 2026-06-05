@@ -86,7 +86,11 @@ export default function PaymentMethods({ methods = [] }: Props) {
 
     const debouncedSearch = useCallback((value: string) => {
         setSearchInput(value);
-        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
         searchTimeoutRef.current = setTimeout(() => {
             setSearchQuery(value);
             setCurrentPage(1);
@@ -95,8 +99,9 @@ export default function PaymentMethods({ methods = [] }: Props) {
 
     useEffect(
         () => () => {
-            if (searchTimeoutRef.current)
+            if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
+            }
         },
         [],
     );
@@ -172,7 +177,10 @@ export default function PaymentMethods({ methods = [] }: Props) {
     };
 
     const handleDeleteConfirm = () => {
-        if (!deletingId) return;
+        if (!deletingId) {
+            return;
+        }
+
         router.delete(route('payment-methods.destroy', deletingId), {
             onSuccess: () => {
                 toast.success('Metode pembayaran berhasil dihapus');
@@ -585,7 +593,9 @@ export default function PaymentMethods({ methods = [] }: Props) {
             <Dialog
                 open={deletingId !== null}
                 onOpenChange={(open) => {
-                    if (!open) setDeletingId(null);
+                    if (!open) {
+                        setDeletingId(null);
+                    }
                 }}
             >
                 <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-sm">

@@ -15,41 +15,49 @@ export class EscposBuilder {
 
     init() {
         this.buf.push(0x1b, 0x40);
+
         return this;
     }
 
     emphasis(on: boolean) {
         this.buf.push(0x1b, 0x45, on ? 0x01 : 0x00);
+
         return this;
     }
 
     selectPrintMode(mode: number) {
         this.buf.push(0x1b, 0x21, mode);
+
         return this;
     }
 
     center() {
         this.buf.push(0x1b, 0x61, 0x01);
+
         return this;
     }
 
     left() {
         this.buf.push(0x1b, 0x61, 0x00);
+
         return this;
     }
 
     text(data: string) {
         this.buf.push(...textEncoder(data));
+
         return this;
     }
 
     line(data: string) {
         this.buf.push(...textEncoder(data + '\n'));
+
         return this;
     }
 
     feed(n = 1) {
         this.buf.push(0x1b, 0x64, n);
+
         return this;
     }
 
@@ -59,6 +67,7 @@ export class EscposBuilder {
 
     cut() {
         this.buf.push(0x1d, 0x56, 0x00);
+
         return this;
     }
 
@@ -122,8 +131,15 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
 
     // Store header
     e.center().emphasis(true).line(data.storeName).emphasis(false);
-    if (data.storeAddress) e.line(data.storeAddress);
-    if (data.storePhone) e.line('Telp: ' + data.storePhone);
+
+    if (data.storeAddress) {
+        e.line(data.storeAddress);
+    }
+
+    if (data.storePhone) {
+        e.line('Telp: ' + data.storePhone);
+    }
+
     e.feed();
 
     // Receipt number
@@ -138,8 +154,15 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
     e.line('Tanggal: ' + data.date);
     e.line('Kasir: ' + data.cashier);
     e.line('Tipe: ' + data.orderType);
-    if (data.paymentMethod) e.line('Bayar: ' + data.paymentMethod);
-    if (data.customer) e.line('Pelanggan: ' + data.customer);
+
+    if (data.paymentMethod) {
+        e.line('Bayar: ' + data.paymentMethod);
+    }
+
+    if (data.customer) {
+        e.line('Pelanggan: ' + data.customer);
+    }
+
     e.feed();
 
     // Items header
@@ -161,6 +184,7 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
         );
 
         let rest = restName;
+
         while (rest.length > 0) {
             const chunk = rest.slice(0, 12);
             rest = rest.slice(12);
@@ -173,12 +197,15 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
     // Totals
     e.left();
     e.line(lineItem('Subtotal', formatIdrShort(data.subtotal)));
+
     if (data.discount > 0) {
         e.line(lineItem('Diskon', '-' + formatIdrShort(data.discount)));
     }
+
     if (data.tax > 0) {
         e.line(lineItem('Pajak', '+' + formatIdrShort(data.tax)));
     }
+
     e.separator('=', W);
     e.selectPrintMode(TXT.EMPHASIZED);
     e.line(lineItem('Total', formatIdrShort(data.total)));

@@ -104,6 +104,7 @@ export default function AdminDashboard({
                             warning: 'from-amber-500 to-amber-600',
                             destructive: 'from-red-500 to-red-600',
                         };
+
                         return (
                             <Card key={card.title}>
                                 <CardHeader className="flex flex-row items-center justify-between pb-2">

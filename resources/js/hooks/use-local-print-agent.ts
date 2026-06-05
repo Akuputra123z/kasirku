@@ -21,7 +21,11 @@ interface UseLocalPrintAgentResult {
     isChecking: boolean;
     isPrinting: boolean;
     checkAgent: () => Promise<LocalAgentStatus | null>;
-    print: (data: Uint8Array, driver: string, options?: Record<string, string>) => Promise<{ success: boolean; message: string; driver: string }>;
+    print: (
+        data: Uint8Array,
+        driver: string,
+        options?: Record<string, string>,
+    ) => Promise<{ success: boolean; message: string; driver: string }>;
 }
 
 export function useLocalPrintAgent(): UseLocalPrintAgentResult {
@@ -39,6 +43,7 @@ export function useLocalPrintAgent(): UseLocalPrintAgentResult {
 
             if (!res.ok) {
                 setStatus(null);
+
                 return null;
             }
 
@@ -50,21 +55,27 @@ export function useLocalPrintAgent(): UseLocalPrintAgentResult {
                 usbAvailable: data.drivers?.usb?.available ?? false,
                 fileAvailable: data.drivers?.file?.available ?? true,
                 bluetoothDevice: data.drivers?.bluetooth?.device ?? '',
-                bluetoothDeviceExists: data.drivers?.bluetooth?.device_exists ?? false,
+                bluetoothDeviceExists:
+                    data.drivers?.bluetooth?.device_exists ?? false,
                 usbPrinter: data.drivers?.usb?.printer ?? '',
                 receiptsDir: data.drivers?.file?.path ?? '',
             };
 
             setStatus(result);
+
             return result;
         } catch {
             setStatus(null);
+
             return null;
         }
     }, []);
 
     useEffect(() => {
-        if (checkedRef.current) return;
+        if (checkedRef.current) {
+            return;
+        }
+
         checkedRef.current = true;
 
         const timeout = setTimeout(() => {
@@ -110,7 +121,8 @@ export function useLocalPrintAgent(): UseLocalPrintAgentResult {
             } catch (err: any) {
                 return {
                     success: false,
-                    message: err?.message || 'Gagal terhubung ke Local Print Agent',
+                    message:
+                        err?.message || 'Gagal terhubung ke Local Print Agent',
                     driver,
                 };
             } finally {

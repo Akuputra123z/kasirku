@@ -20,7 +20,10 @@ export default function VerifyEmail({ status }: { status?: string }) {
     const [resent, setResent] = useState(false);
 
     const handleVerify = () => {
-        if (otp.length !== 6 || isSubmitting) return;
+        if (otp.length !== 6 || isSubmitting) {
+            return;
+        }
+
         setIsSubmitting(true);
 
         router.post(

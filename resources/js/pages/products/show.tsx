@@ -1,6 +1,5 @@
 'use client';
 import { Head, Link } from '@inertiajs/react';
-import products from '@/routes/products';
 import {
     ArrowLeft,
     Package,
@@ -15,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import products from '@/routes/products';
 
 interface ProductVariant {
     id: number;
@@ -32,6 +32,8 @@ interface Product {
     name: string;
     description: string | null;
     price: number;
+    cost_price?: number | null;
+    barcode?: string | null;
     stock: number;
     category_id: number;
     brand_id: number | null;
@@ -150,16 +152,44 @@ export default function ShowProduct({ product }: Props) {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="grid gap-6 p-6">
-                            <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
+                            <div className="grid grid-cols-2 gap-6 md:grid-cols-5">
                                 <div className="space-y-1.5">
                                     <div className="flex items-center gap-1.5 text-neutral-500">
                                         <Banknote className="size-4" />
                                         <span className="text-[12px] font-bold uppercase">
-                                            Harga Dasar
+                                            Harga Jual
                                         </span>
                                     </div>
                                     <p className="text-lg font-black text-[#2d5a4e] dark:text-[#458f7c]">
                                         {formattedPrice}
+                                    </p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-1.5 text-neutral-500">
+                                        <Banknote className="size-4" />
+                                        <span className="text-[12px] font-bold uppercase">
+                                            Modal Awal
+                                        </span>
+                                    </div>
+                                    <p className="text-lg font-bold text-neutral-700 dark:text-neutral-300">
+                                        {product.cost_price != null
+                                            ? new Intl.NumberFormat('id-ID', {
+                                                  style: 'currency',
+                                                  currency: 'IDR',
+                                                  minimumFractionDigits: 0,
+                                              }).format(product.cost_price)
+                                            : '—'}
+                                    </p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-1.5 text-neutral-500">
+                                        <Tag className="size-4" />
+                                        <span className="text-[12px] font-bold uppercase">
+                                            Barcode
+                                        </span>
+                                    </div>
+                                    <p className="font-mono text-lg font-bold">
+                                        {product.barcode || '—'}
                                     </p>
                                 </div>
                                 <div className="space-y-1.5">

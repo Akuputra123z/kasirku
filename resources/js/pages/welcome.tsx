@@ -1,7 +1,6 @@
 'use client';
 
 import { Head, Link, usePage } from '@inertiajs/react';
-import { useState } from 'react';
 import {
     ArrowRight,
     BarChart3,
@@ -19,6 +18,7 @@ import {
     TrendingUp,
     X,
 } from 'lucide-react';
+import { useState } from 'react';
 import { dashboard, login, register } from '@/routes';
 
 export default function Welcome({

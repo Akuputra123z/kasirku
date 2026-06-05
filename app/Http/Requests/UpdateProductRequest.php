@@ -29,6 +29,8 @@ class UpdateProductRequest extends FormRequest
             'category_id' => ['required', 'exists:categories,id'],
             'brand_id' => ['nullable', 'exists:brands,id'],
             'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+            'barcode' => ['nullable', 'string', 'max:100', Rule::unique('products')->ignore($this->route('product'))->where(fn ($q) => $q->where('tenant_id', tenant_id()))],
+            'cost_price' => ['nullable', 'numeric', 'min:0'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'variants' => ['nullable', 'array'],
             'variants.*.id' => ['nullable', 'exists:product_variants,id'],

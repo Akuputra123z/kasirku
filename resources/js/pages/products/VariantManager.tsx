@@ -153,6 +153,7 @@ export function VariantManager({ variants, onChange }: VariantManagerProps) {
                                     value={variant.stock}
                                     onChange={(e) => {
                                         const val = e.target.value;
+
                                         if (val.startsWith('-')) {
                                             updateVariant(
                                                 index,

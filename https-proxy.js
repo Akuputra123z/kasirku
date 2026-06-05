@@ -1,6 +1,6 @@
-const https = require('https');
-const http = require('http');
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
 
 const options = {
     key: fs.readFileSync('192.168.1.10-key.pem'),

@@ -16,6 +16,7 @@ import {
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
+import { ImportDialog } from '@/components/import-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -35,7 +36,6 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ImportDialog } from '@/components/import-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -88,7 +88,11 @@ export default function Index({ categories, filters, flash }: Props) {
 
     const debouncedSearch = useCallback((value: string) => {
         setSearchQuery(value);
-        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
         searchTimeoutRef.current = setTimeout(() => {
             router.get(
                 route('categories.index'),
@@ -100,8 +104,9 @@ export default function Index({ categories, filters, flash }: Props) {
 
     useEffect(
         () => () => {
-            if (searchTimeoutRef.current)
+            if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
+            }
         },
         [],
     );

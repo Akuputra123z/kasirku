@@ -28,7 +28,9 @@ export function useBluetoothPrint(): UseBluetoothPrintResult {
     const [isPrinting, setIsPrinting] = useState(false);
     const [deviceName, setDeviceName] = useState<string | null>(null);
     const deviceRef = useRef<BluetoothDevice | null>(null);
-    const characteristicRef = useRef<BluetoothRemoteGATTCharacteristic | null>(null);
+    const characteristicRef = useRef<BluetoothRemoteGATTCharacteristic | null>(
+        null,
+    );
 
     const isSupported =
         typeof navigator !== 'undefined' && 'bluetooth' in navigator;
@@ -73,20 +75,23 @@ export function useBluetoothPrint(): UseBluetoothPrintResult {
 
                     const server = await device.gatt!.connect();
 
-                    let foundChar: BluetoothRemoteGATTCharacteristic | null = null;
+                    let foundChar: BluetoothRemoteGATTCharacteristic | null =
+                        null;
 
                     for (const serviceUuid of THERMAL_PRINTER_SERVICES) {
                         let service: BluetoothRemoteGATTService;
 
                         try {
-                            service = await server.getPrimaryService(serviceUuid);
+                            service =
+                                await server.getPrimaryService(serviceUuid);
                         } catch {
                             continue;
                         }
 
                         for (const charUuid of THERMAL_PRINTER_CHARACTERISTICS) {
                             try {
-                                foundChar = await service.getCharacteristic(charUuid);
+                                foundChar =
+                                    await service.getCharacteristic(charUuid);
                                 break;
                             } catch {
                                 continue;
@@ -98,10 +103,14 @@ export function useBluetoothPrint(): UseBluetoothPrintResult {
                         }
 
                         try {
-                            const characteristics = await service.getCharacteristics();
+                            const characteristics =
+                                await service.getCharacteristics();
 
                             for (const char of characteristics) {
-                                if (char.properties.write || char.properties.writeWithoutResponse) {
+                                if (
+                                    char.properties.write ||
+                                    char.properties.writeWithoutResponse
+                                ) {
                                     foundChar = char;
                                     break;
                                 }
@@ -123,7 +132,10 @@ export function useBluetoothPrint(): UseBluetoothPrintResult {
                                 const chars = await svc.getCharacteristics();
 
                                 for (const char of chars) {
-                                    if (char.properties.write || char.properties.writeWithoutResponse) {
+                                    if (
+                                        char.properties.write ||
+                                        char.properties.writeWithoutResponse
+                                    ) {
                                         foundChar = char;
                                         break;
                                     }
@@ -152,12 +164,13 @@ export function useBluetoothPrint(): UseBluetoothPrintResult {
 
                 await new Promise((resolve) => setTimeout(resolve, 500));
             } catch (err: any) {
-
                 characteristicRef.current = null;
                 deviceRef.current = null;
                 setDeviceName(null);
 
-                throw new Error(err?.message || 'Gagal mencetak via Bluetooth.');
+                throw new Error(
+                    err?.message || 'Gagal mencetak via Bluetooth.',
+                );
             } finally {
                 setIsPrinting(false);
             }

@@ -9,6 +9,8 @@ use App\Http\Controllers\ChatController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentMethodController;
+use App\Http\Controllers\Pos\BarcodeLabelController;
+use App\Http\Controllers\Pos\BarcodeScanController;
 use App\Http\Controllers\PrintController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PurchaseOrderController;
@@ -53,10 +55,12 @@ Route::middleware(['web', 'tenant.from-user'])->group(function () {
         Route::post('products/import', [ProductController::class, 'import'])->middleware('permission:manage-products')->name('products.import');
         Route::get('products/import/template', [ProductController::class, 'downloadTemplate'])->middleware('permission:manage-products')->name('products.import.template');
         Route::resource('products', ProductController::class)->middleware('permission:manage-products');
+        Route::get('products/{product}/barcode-label', [BarcodeLabelController::class, '__invoke'])->middleware('permission:manage-products')->name('products.barcode-label');
 
         Route::middleware('permission:manage-pos')->group(function () {
             Route::get('pos', [TransactionController::class, 'index'])->name('pos.index');
             Route::post('pos', [TransactionController::class, 'store'])->name('pos.store');
+            Route::get('pos/scan/{barcode}', [BarcodeScanController::class, '__invoke'])->name('pos.scan');
         });
         Route::get('transactions/history', [TransactionController::class, 'history'])->name('transactions.history')->middleware('permission:view-history');
         Route::resource('payment-methods', PaymentMethodController::class)->middleware('permission:manage-payment-methods');

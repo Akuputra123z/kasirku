@@ -1,8 +1,8 @@
 'use client';
 
 import { Head, router } from '@inertiajs/react';
-import { useState } from 'react';
 import { Activity, Search } from 'lucide-react';
+import { useState } from 'react';
 import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,9 +62,19 @@ export default function AuditLogs({
 
     const applyFilters = () => {
         const params: Record<string, string> = {};
-        if (search) params.search = search;
-        if (eventFilter !== 'all') params.event = eventFilter;
-        if (typeFilter !== 'all') params.type = typeFilter;
+
+        if (search) {
+            params.search = search;
+        }
+
+        if (eventFilter !== 'all') {
+            params.event = eventFilter;
+        }
+
+        if (typeFilter !== 'all') {
+            params.type = typeFilter;
+        }
+
         router.get('/admin/audit-logs', params, {
             preserveState: true,
             replace: true,
@@ -104,7 +114,9 @@ export default function AuditLogs({
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     onKeyDown={(e) => {
-                                        if (e.key === 'Enter') applyFilters();
+                                        if (e.key === 'Enter') {
+                                            applyFilters();
+                                        }
                                     }}
                                 />
                             </div>
@@ -113,10 +125,19 @@ export default function AuditLogs({
                                 onValueChange={(v) => {
                                     setTypeFilter(v);
                                     const params: Record<string, string> = {};
-                                    if (search) params.search = search;
-                                    if (eventFilter !== 'all')
+
+                                    if (search) {
+                                        params.search = search;
+                                    }
+
+                                    if (eventFilter !== 'all') {
                                         params.event = eventFilter;
-                                    if (v !== 'all') params.type = v;
+                                    }
+
+                                    if (v !== 'all') {
+                                        params.type = v;
+                                    }
+
                                     navigate(params);
                                 }}
                             >
@@ -138,10 +159,19 @@ export default function AuditLogs({
                                 onValueChange={(v) => {
                                     setEventFilter(v);
                                     const params: Record<string, string> = {};
-                                    if (search) params.search = search;
-                                    if (v !== 'all') params.event = v;
-                                    if (typeFilter !== 'all')
+
+                                    if (search) {
+                                        params.search = search;
+                                    }
+
+                                    if (v !== 'all') {
+                                        params.event = v;
+                                    }
+
+                                    if (typeFilter !== 'all') {
                                         params.type = typeFilter;
+                                    }
+
                                     navigate(params);
                                 }}
                             >

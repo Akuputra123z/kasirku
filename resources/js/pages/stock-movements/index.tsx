@@ -149,26 +149,34 @@ const typeStyle = (type: string) => {
 const QUICK_QTY = [1, 5, 10, 25, 50, 100];
 
 const stockLevel = (stock: number) => {
-    if (stock <= 0)
+    if (stock <= 0) {
         return {
             label: 'Habis',
             class: 'text-red-600 bg-red-50 dark:bg-red-950/30',
         };
-    if (stock <= 5)
+    }
+
+    if (stock <= 5) {
         return {
             label: 'Kritis',
             class: 'text-orange-600 bg-orange-50 dark:bg-orange-950/30',
         };
-    if (stock <= 20)
+    }
+
+    if (stock <= 20) {
         return {
             label: 'Rendah',
             class: 'text-amber-600 bg-amber-50 dark:bg-amber-950/30',
         };
-    if (stock <= 50)
+    }
+
+    if (stock <= 50) {
         return {
             label: 'Sedang',
             class: 'text-blue-600 bg-blue-50 dark:bg-blue-950/30',
         };
+    }
+
     return {
         label: 'Aman',
         class: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30',
@@ -229,8 +237,11 @@ export default function Index({
     const debouncedSearch = useCallback(
         (value: string) => {
             setSearchQuery(value);
-            if (searchTimeoutRef.current)
+
+            if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
+            }
+
             searchTimeoutRef.current = setTimeout(() => {
                 applyFilters({ search: value || null });
             }, 300);
@@ -240,8 +251,9 @@ export default function Index({
 
     useEffect(
         () => () => {
-            if (searchTimeoutRef.current)
+            if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
+            }
         },
         [],
     );
@@ -329,8 +341,10 @@ export default function Index({
     );
 
     const SortIcon = ({ field }: { field: string }) => {
-        if (sortField !== field)
+        if (sortField !== field) {
             return <ArrowUpDown className="ml-1 size-3 opacity-30" />;
+        }
+
         return sortDir === 'desc' ? (
             <ArrowDown className="ml-1 size-3" />
         ) : (
@@ -594,6 +608,7 @@ export default function Index({
                                 movements.data.map((m) => {
                                     const style = typeStyle(m.type);
                                     const Icon = style.icon;
+
                                     return (
                                         <TableRow
                                             key={m.id}
@@ -823,7 +838,10 @@ export default function Index({
                 open={isAdjustOpen}
                 onOpenChange={(open) => {
                     setIsAdjustOpen(open);
-                    if (!open) reset();
+
+                    if (!open) {
+                        reset();
+                    }
                 }}
             >
                 <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[520px]">
@@ -873,6 +891,7 @@ export default function Index({
                                         const Icon = opt.icon;
                                         const isActive =
                                             data.type === opt.value;
+
                                         return (
                                             <button
                                                 key={opt.value}

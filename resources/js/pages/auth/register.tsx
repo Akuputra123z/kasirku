@@ -1,6 +1,6 @@
 import { Head } from '@inertiajs/react';
-import { useState } from 'react';
 import { User, Mail, Lock, Check, X, Chrome } from 'lucide-react';
+import { useState } from 'react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import TextLink from '@/components/text-link';
@@ -56,22 +56,27 @@ export default function Register({ googleUser }: Props) {
             });
 
             let data;
+
             try {
                 data = await res.json();
             } catch {
                 setErrors({ form: 'Terjadi kesalahan. Silakan coba lagi.' });
+
                 return;
             }
 
             if (data.status === 'success') {
                 window.location.href = data.redirect;
+
                 return;
             }
 
             const mapped: Record<string, string> = {};
+
             for (const [key, msgs] of Object.entries(data.errors ?? {})) {
                 mapped[key] = Array.isArray(msgs) ? msgs[0] : String(msgs);
             }
+
             setErrors(
                 Object.keys(mapped).length
                     ? mapped

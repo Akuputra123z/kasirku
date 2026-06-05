@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateProductRequest;
 use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
+use App\Services\BarcodeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
@@ -31,6 +32,7 @@ class ProductController extends Controller
 
         $products = Product::with(['category', 'brand', 'variants'])
             ->when($search, fn ($q, $s) => $q->where('name', 'like', "%{$s}%")
+                ->orWhere('barcode', 'like', "%{$s}%")
                 ->orWhere('description', 'like', "%{$s}%")
                 ->orWhereHas('category', fn ($cq) => $cq->where('name', 'like', "%{$s}%"))
                 ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', "%{$s}%"))
@@ -62,6 +64,12 @@ class ProductController extends Controller
 
         $product = Product::create($validated);
 
+        if (empty($validated['barcode'])) {
+            $barcode = 'BRC-'.$product->tenant_id.'-'.$product->id;
+            $product->update(['barcode' => $barcode]);
+            BarcodeService::bust($barcode);
+        }
+
         if (! empty($validated['variants'])) {
             $product->variants()->createMany($validated['variants']);
         }
@@ -87,7 +95,18 @@ class ProductController extends Controller
             unset($validated['image']);
         }
 
+        $oldBarcode = $product->getOriginal('barcode');
+
         $product->update($validated);
+
+        if ($oldBarcode !== $product->barcode) {
+            if ($oldBarcode) {
+                BarcodeService::bust($oldBarcode);
+            }
+            if ($product->barcode) {
+                BarcodeService::bust($product->barcode);
+            }
+        }
 
         if (isset($validated['variants'])) {
             $product->variants()->delete();
@@ -110,6 +129,10 @@ class ProductController extends Controller
 
         if ($product->image) {
             Storage::disk('public')->delete($product->image);
+        }
+
+        if ($product->barcode) {
+            BarcodeService::bust($product->barcode);
         }
 
         $product->delete();
@@ -156,12 +179,21 @@ class ProductController extends Controller
         $deleted = count($idsToDelete);
 
         if ($deleted > 0) {
-            // 3. Hapus semua file gambar sekaligus dalam satu operasi penyimpanan
+            // 3. Hapus cache barcode
+            $barcodesToBust = Product::whereIn('id', $idsToDelete)
+                ->whereNotNull('barcode')
+                ->pluck('barcode');
+
+            foreach ($barcodesToBust as $barcode) {
+                BarcodeService::bust($barcode);
+            }
+
+            // 4. Hapus semua file gambar sekaligus dalam satu operasi penyimpanan
             if (! empty($imagesToDelete)) {
                 Storage::disk('public')->delete($imagesToDelete);
             }
 
-            // 4. Hapus semua data di database sekaligus hanya dengan SATU QUERY
+            // 5. Hapus semua data di database sekaligus hanya dengan SATU QUERY
             Product::whereIn('id', $idsToDelete)->delete();
         }
 
@@ -271,6 +303,7 @@ class ProductController extends Controller
                 'description' => $rowData['description'] ?? null,
                 'price' => (float) $rowData['price'],
                 'stock' => (int) ($rowData['stock'] ?? 0),
+                'barcode' => $rowData['barcode'] ?? null,
                 'category_id' => $category?->id,
                 'brand_id' => $brand?->id,
                 'status' => $status,

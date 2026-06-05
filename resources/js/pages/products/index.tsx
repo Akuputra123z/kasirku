@@ -19,12 +19,13 @@ import {
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 
+import { CameraScanner } from '@/components/camera-scanner';
+import { ImportDialog } from '@/components/import-dialog';
 import { Badge } from '@/components/ui/badge';
-import { CurrencyInput } from '@/components/ui/currency-input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { ImportDialog } from '@/components/import-dialog';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { DataTable } from '@/components/ui/data-table';
 import {
     Dialog,
@@ -51,6 +52,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useBarcodeScanner } from '@/hooks/use-barcode-scanner';
+import { useBeep } from '@/hooks/use-beep';
 import { VariantManager } from './VariantManager';
 
 interface Category {
@@ -71,6 +74,8 @@ interface Product {
     name: string;
     description: string | null;
     price: number;
+    cost_price?: number | null;
+    barcode?: string | null;
     stock: number;
     category_id: number;
     status: 'active' | 'inactive';
@@ -98,6 +103,7 @@ interface Props {
 export default function Index({ products, categories, filters }: Props) {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isImportOpen, setIsImportOpen] = useState(false);
+    const [isCameraOpen, setIsCameraOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState(filters?.search ?? '');
@@ -114,6 +120,7 @@ export default function Index({ products, categories, filters }: Props) {
     }>({ open: false, action: 'delete', loading: false });
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
+    const barcodeInputRef = useRef<HTMLInputElement>(null);
     const categorySearchRef = useRef<HTMLInputElement>(null);
     const filteredCategories = categories.filter((c) =>
         c.name.toLowerCase().includes(categorySearch.toLowerCase()),
@@ -140,6 +147,8 @@ export default function Index({ products, categories, filters }: Props) {
             name: '',
             description: '',
             price: '',
+            cost_price: '',
+            barcode: '',
             stock: '',
             category_id: '',
             status: 'active',
@@ -157,6 +166,38 @@ export default function Index({ products, categories, filters }: Props) {
             }, 50);
         }
     }, [errors]);
+
+    const { beep } = useBeep();
+
+    const handleBarcodeScan = useCallback(
+        (barcode: string) => {
+            setData('barcode', barcode);
+            beep('success');
+            toast.success(`Barcode terdeteksi: ${barcode}`);
+        },
+        [setData, beep],
+    );
+
+    const { lastScanned } = useBarcodeScanner({
+        onScan: handleBarcodeScan,
+        enabled: isDialogOpen,
+    });
+
+    useEffect(() => {
+        if (lastScanned) {
+            barcodeInputRef.current?.focus();
+        }
+    }, [lastScanned]);
+
+    const handleCameraScan = useCallback(
+        (barcode: string) => {
+            setData('barcode', barcode);
+            beep('success');
+            toast.success(`Barcode terdeteksi: ${barcode}`);
+            setIsCameraOpen(false);
+        },
+        [setData, beep],
+    );
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !processing) {
@@ -185,6 +226,8 @@ export default function Index({ products, categories, filters }: Props) {
             name: product.name,
             description: product.description || '',
             price: product.price.toString(),
+            cost_price: product.cost_price?.toString() || '',
+            barcode: product.barcode || '',
             stock: product.stock.toString(),
             category_id: product.category_id.toString(),
             status: product.status,
@@ -248,7 +291,10 @@ export default function Index({ products, categories, filters }: Props) {
     };
 
     const handleBulkDelete = () => {
-        if (selectedIds.length === 0) return;
+        if (selectedIds.length === 0) {
+            return;
+        }
+
         setConfirmDialog({ open: true, action: 'bulk-delete', loading: false });
     };
 
@@ -314,23 +360,31 @@ export default function Index({ products, categories, filters }: Props) {
 
     useEffect(
         () => () => {
-            if (searchTimeoutRef.current)
+            if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
+            }
         },
         [],
     );
 
-    const debouncedSearch = useCallback((value: string) => {
-        setSearchQuery(value);
-        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-        searchTimeoutRef.current = setTimeout(() => {
-            router.get(
-                '/products',
-                { search: value || null, per_page: perPage },
-                { preserveState: true, replace: true },
-            );
-        }, 300);
-    }, [perPage]);
+    const debouncedSearch = useCallback(
+        (value: string) => {
+            setSearchQuery(value);
+
+            if (searchTimeoutRef.current) {
+                clearTimeout(searchTimeoutRef.current);
+            }
+
+            searchTimeoutRef.current = setTimeout(() => {
+                router.get(
+                    '/products',
+                    { search: value || null, per_page: perPage },
+                    { preserveState: true, replace: true },
+                );
+            }, 300);
+        },
+        [perPage],
+    );
 
     const goToPage = (page: number) => {
         router.get(
@@ -430,11 +484,35 @@ export default function Index({ products, categories, filters }: Props) {
         },
         {
             accessorKey: 'price',
-            header: 'Harga',
+            header: 'Harga Jual',
             cell: ({ row }) => (
                 <span className="text-[13px] font-bold">
                     Rp{' '}
                     {new Intl.NumberFormat('id-ID').format(row.original.price)}
+                </span>
+            ),
+        },
+        {
+            accessorKey: 'cost_price',
+            header: 'Modal Awal',
+            cell: ({ row }) => {
+                const cp = row.original.cost_price;
+
+                return (
+                    <span className="text-[13px] font-medium text-muted-foreground">
+                        {cp != null
+                            ? `Rp ${new Intl.NumberFormat('id-ID').format(cp)}`
+                            : '-'}
+                    </span>
+                );
+            },
+        },
+        {
+            accessorKey: 'barcode',
+            header: 'Barcode',
+            cell: ({ row }) => (
+                <span className="font-mono text-[12px] text-muted-foreground">
+                    {row.original.barcode || '—'}
                 </span>
             ),
         },
@@ -519,6 +597,21 @@ export default function Index({ products, categories, filters }: Props) {
                                         className="text-blue-500"
                                     />{' '}
                                     Edit Produk
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() =>
+                                        router.get(
+                                            route('products.barcode-label', product.id),
+                                        )
+                                    }
+                                    className="cursor-pointer gap-2.5 rounded-lg px-2 py-2 text-[13px]"
+                                >
+                                    <Icon
+                                        icon="solar:qr-code-bold-duotone"
+                                        width={16}
+                                        className="text-violet-500"
+                                    />{' '}
+                                    Cetak Barcode
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
@@ -622,10 +715,13 @@ export default function Index({ products, categories, filters }: Props) {
                         value={perPage.toString()}
                         onValueChange={(v) => handlePageSizeChange(Number(v))}
                     >
-                        <SelectTrigger className="h-8 w-16 rounded-lg bg-transparent text-[12px] border-neutral-200 dark:border-neutral-800">
+                        <SelectTrigger className="h-8 w-16 rounded-lg border-neutral-200 bg-transparent text-[12px] dark:border-neutral-800">
                             <SelectValue />
                         </SelectTrigger>
-                        <SelectContent side="top" className="border-neutral-200 dark:border-neutral-800 rounded-xl">
+                        <SelectContent
+                            side="top"
+                            className="rounded-xl border-neutral-200 dark:border-neutral-800"
+                        >
                             <SelectItem value="10">10</SelectItem>
                             <SelectItem value="20">20</SelectItem>
                             <SelectItem value="30">30</SelectItem>
@@ -638,8 +734,11 @@ export default function Index({ products, categories, filters }: Props) {
                 <div className="flex items-center gap-2">
                     <span className="text-[12px] text-muted-foreground">
                         {(products.current_page - 1) * products.per_page + 1}-
-                        {Math.min(products.current_page * products.per_page, products.total)} of{' '}
-                        {products.total}
+                        {Math.min(
+                            products.current_page * products.per_page,
+                            products.total,
+                        )}{' '}
+                        of {products.total}
                     </span>
                     <div className="flex items-center gap-1">
                         <Button
@@ -658,7 +757,9 @@ export default function Index({ products, categories, filters }: Props) {
                             variant="ghost"
                             size="icon"
                             className="size-8 rounded-lg"
-                            disabled={products.current_page >= products.last_page}
+                            disabled={
+                                products.current_page >= products.last_page
+                            }
                             onClick={() => goToPage(products.current_page + 1)}
                         >
                             <ChevronRight className="size-4" />
@@ -668,17 +769,26 @@ export default function Index({ products, categories, filters }: Props) {
             </div>
 
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="flex max-h-[95vh] flex-col overflow-hidden rounded-[2.5rem] border-none bg-white p-0 shadow-2xl sm:max-w-[800px] dark:bg-neutral-950">
+                <DialogContent className="flex max-h-[95vh] flex-col overflow-hidden rounded-2xl border-none bg-white p-0 shadow-2xl sm:max-w-[800px] md:rounded-[2.5rem] dark:bg-neutral-950">
                     <form
                         onSubmit={handleSubmit}
                         onKeyDown={handleKeyDown}
                         className="flex h-full flex-col overflow-hidden"
                     >
-                        <div className="border-b border-neutral-100 bg-neutral-50/50 p-8 pb-4 dark:border-neutral-900 dark:bg-neutral-900/20">
+                        <div className="border-b border-neutral-100 bg-neutral-50/50 p-4 pb-3 md:p-8 md:pb-4 dark:border-neutral-900 dark:bg-neutral-900/20">
                             <DialogHeader>
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-5">
-                                        <div className="flex size-14 items-center justify-center rounded-[1.25rem] bg-black text-white shadow-lg shadow-black/10 dark:bg-white dark:text-black dark:shadow-white/5">
+                                    <div className="flex items-center gap-3 md:gap-5">
+                                        <div className="flex size-10 items-center justify-center rounded-xl bg-black text-white shadow-lg shadow-black/10 md:size-14 md:rounded-[1.25rem] dark:bg-white dark:text-black dark:shadow-white/5">
+                                            <Icon
+                                                icon={
+                                                    editingProduct
+                                                        ? 'solar:box-minimalistic-bold-duotone'
+                                                        : 'solar:add-square-bold-duotone'
+                                                }
+                                                width={24}
+                                                className="md:hidden"
+                                            />
                                             <Icon
                                                 icon={
                                                     editingProduct
@@ -686,15 +796,16 @@ export default function Index({ products, categories, filters }: Props) {
                                                         : 'solar:add-square-bold-duotone'
                                                 }
                                                 width={32}
+                                                className="hidden md:block"
                                             />
                                         </div>
                                         <div>
-                                            <DialogTitle className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">
+                                            <DialogTitle className="text-lg font-bold tracking-tight text-neutral-900 md:text-2xl dark:text-white">
                                                 {editingProduct
                                                     ? 'Edit Produk'
                                                     : 'Tambah Produk Baru'}
                                             </DialogTitle>
-                                            <DialogDescription className="mt-0.5 text-[13px] font-medium text-neutral-500">
+                                            <DialogDescription className="mt-0.5 text-[12px] font-medium text-neutral-500 md:text-[13px]">
                                                 {editingProduct
                                                     ? 'Ubah detail produk dan pengaturan inventaris.'
                                                     : 'Lengkapi informasi di bawah untuk membuat produk baru.'}
@@ -715,13 +826,13 @@ export default function Index({ products, categories, filters }: Props) {
 
                         <div className="custom-scrollbar dialog-form-scroll-container flex-1 overflow-y-auto">
                             {hasErrors && (
-                                <div className="mx-8 mt-6 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20">
+                                <div className="mx-4 mt-4 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-3 md:mx-8 md:mt-6 md:p-4 dark:border-red-800/50 dark:bg-red-900/20">
                                     <Icon
                                         icon="solar:danger-circle-bold-duotone"
-                                        className="mt-0.5 size-5 shrink-0 text-red-500"
+                                        className="mt-0.5 size-4 shrink-0 text-red-500 md:size-5"
                                     />
                                     <div className="min-w-0">
-                                        <p className="text-[13px] font-bold text-red-700 dark:text-red-400">
+                                        <p className="text-[12px] font-bold text-red-700 md:text-[13px] dark:text-red-400">
                                             Please fix the following errors:
                                         </p>
                                         <ul className="mt-1.5 space-y-0.5">
@@ -729,7 +840,7 @@ export default function Index({ products, categories, filters }: Props) {
                                                 ([field, message]) => (
                                                     <li
                                                         key={field}
-                                                        className="truncate text-[12px] font-medium text-red-600 dark:text-red-300"
+                                                        className="truncate text-[11px] font-medium text-red-600 md:text-[12px] dark:text-red-300"
                                                     >
                                                         • {message as string}
                                                     </li>
@@ -739,21 +850,21 @@ export default function Index({ products, categories, filters }: Props) {
                                     </div>
                                 </div>
                             )}
-                            <div className="space-y-10 p-8">
-                                <div className="grid grid-cols-1 gap-10 lg:grid-cols-12">
+                            <div className="space-y-5 p-4 md:space-y-8 md:p-8">
+                                <div className="grid grid-cols-1 gap-5 md:gap-10 lg:grid-cols-12">
                                     <div className="space-y-4 lg:col-span-5">
                                         <div className="mb-1 flex items-center gap-2">
                                             <Icon
                                                 icon="solar:gallery-bold-duotone"
-                                                className="size-4 text-neutral-400"
+                                                className="size-3.5 text-neutral-400 md:size-4"
                                             />
-                                            <Label className="text-[12px] font-bold tracking-widest text-neutral-500 uppercase">
+                                            <Label className="text-[11px] font-bold tracking-widest text-neutral-500 md:text-[12px] uppercase">
                                                 Gambar Produk
                                             </Label>
                                         </div>
                                         <div className="group relative">
                                             <div
-                                                className={`flex aspect-[4/3] flex-col items-center justify-center overflow-hidden rounded-[2rem] border-2 border-dashed bg-neutral-50 transition-all duration-300 md:aspect-square dark:bg-neutral-900/30 ${
+                                                className={`flex aspect-[3/1] flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed bg-neutral-50 transition-all duration-300 md:aspect-square md:rounded-[2rem] dark:bg-neutral-900/30 ${
                                                     imagePreview
                                                         ? 'border-neutral-200 dark:border-neutral-800'
                                                         : 'border-neutral-200 hover:border-black hover:bg-neutral-100 dark:border-neutral-800 dark:hover:border-white dark:hover:bg-neutral-900/50'
@@ -796,19 +907,19 @@ export default function Index({ products, categories, filters }: Props) {
                                                                 )
                                                                 ?.click()
                                                         }
-                                                        className="flex flex-col items-center gap-4 text-neutral-400 transition-colors group-hover:text-black dark:group-hover:text-white"
+                                                        className="flex flex-col items-center gap-2 text-neutral-400 transition-colors group-hover:text-black md:gap-4 dark:group-hover:text-white"
                                                     >
-                                                        <div className="flex size-16 items-center justify-center rounded-2xl bg-white shadow-sm dark:bg-neutral-900">
+                                                        <div className="flex size-10 items-center justify-center rounded-xl bg-white shadow-sm md:size-16 md:rounded-2xl dark:bg-neutral-900">
                                                             <Icon
                                                                 icon="solar:camera-add-bold-duotone"
-                                                                className="size-8"
+                                                                className="size-5 md:size-8"
                                                             />
                                                         </div>
                                                         <div className="text-center">
-                                                            <p className="text-[13px] font-bold">
+                                                            <p className="text-[11px] font-bold md:text-[13px]">
                                                                 Upload Image
                                                             </p>
-                                                            <p className="mt-0.5 text-[11px] font-medium opacity-60">
+                                                            <p className="mt-0.5 text-[10px] font-medium opacity-60 md:text-[11px]">
                                                                 JPG, PNG, WebP
                                                                 up to 8MB
                                                             </p>
@@ -834,34 +945,34 @@ export default function Index({ products, categories, filters }: Props) {
                                     <div className="space-y-6 lg:col-span-7">
                                         <div className="space-y-4">
                                             <div className="grid gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <Icon
-                                                        icon="solar:pen-bold-duotone"
-                                                        className="size-4 text-neutral-400"
-                                                    />
-                                                    <Label
-                                                        htmlFor="name"
-                                                        className="text-[12px] font-bold tracking-widest text-neutral-500 uppercase"
-                                                    >
-                                                        Product Name{' '}
-                                                        <span className="text-red-500">
-                                                            *
-                                                        </span>
-                                                    </Label>
-                                                </div>
-                                                <Input
-                                                    ref={nameInputRef}
-                                                    id="name"
-                                                    value={data.name}
-                                                    onChange={(e) =>
-                                                        setData(
-                                                            'name',
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                    placeholder="Enter product title..."
-                                                    className={`h-12 rounded-2xl border-neutral-200 px-5 text-[14px] font-medium transition-all focus:border-black focus:ring-0 dark:border-neutral-800 dark:focus:border-white ${errors.name ? 'border-red-500' : ''}`}
-                                                />
+                                    <div className="flex items-center gap-2">
+                                        <Icon
+                                            icon="solar:pen-bold-duotone"
+                                            className="size-3.5 text-neutral-400 md:size-4"
+                                        />
+                                        <Label
+                                            htmlFor="name"
+                                            className="text-[11px] font-bold tracking-widest text-neutral-500 uppercase md:text-[12px]"
+                                        >
+                                            Product Name{' '}
+                                            <span className="text-red-500">
+                                                *
+                                            </span>
+                                        </Label>
+                                    </div>
+                                    <Input
+                                        ref={nameInputRef}
+                                        id="name"
+                                        value={data.name}
+                                        onChange={(e) =>
+                                            setData(
+                                                'name',
+                                                e.target.value,
+                                            )
+                                        }
+                                        placeholder="Enter product title..."
+                                        className={`h-10 rounded-xl border-neutral-200 px-4 text-[13px] font-medium transition-all focus:border-black focus:ring-0 md:h-12 md:rounded-2xl md:px-5 md:text-[14px] dark:border-neutral-800 dark:focus:border-white ${errors.name ? 'border-red-500' : ''}`}
+                                    />
                                                 {errors.name && (
                                                     <p className="ml-2 text-[11px] font-bold text-red-500 italic">
                                                         {errors.name}
@@ -874,9 +985,9 @@ export default function Index({ products, categories, filters }: Props) {
                                                     <div className="flex items-center gap-2">
                                                         <Icon
                                                             icon="solar:tag-bold-duotone"
-                                                            className="size-4 text-neutral-400"
+                                                            className="size-3.5 text-neutral-400 md:size-4"
                                                         />
-                                                        <Label className="text-[12px] font-bold tracking-widest text-neutral-500 uppercase">
+                                                        <Label className="text-[11px] font-bold tracking-widest text-neutral-500 uppercase md:text-[12px]">
                                                             Category{' '}
                                                             <span className="text-red-500">
                                                                 *
@@ -903,7 +1014,7 @@ export default function Index({ products, categories, filters }: Props) {
                                                         }}
                                                     >
                                                         <SelectTrigger
-                                                            className={`h-12 rounded-2xl border-neutral-200 px-5 text-[14px] font-medium dark:border-neutral-800 ${errors.category_id ? 'border-red-500' : ''}`}
+                                                            className={`h-10 rounded-xl border-neutral-200 px-4 text-[13px] font-medium md:h-12 md:rounded-2xl md:px-5 md:text-[14px] dark:border-neutral-800 ${errors.category_id ? 'border-red-500' : ''}`}
                                                         >
                                                             <SelectValue placeholder="Select Category" />
                                                         </SelectTrigger>
@@ -984,13 +1095,13 @@ export default function Index({ products, categories, filters }: Props) {
                                                     <div className="flex items-center gap-2">
                                                         <Icon
                                                             icon="solar:settings-bold-duotone"
-                                                            className="size-4 text-neutral-400"
+                                                            className="size-3.5 text-neutral-400 md:size-4"
                                                         />
-                                                        <Label className="text-[12px] font-bold tracking-widest text-neutral-500 uppercase">
+                                                        <Label className="text-[11px] font-bold tracking-widest text-neutral-500 uppercase md:text-[12px]">
                                                             Status
                                                         </Label>
                                                     </div>
-                                                    <div className="flex h-12 rounded-2xl border border-neutral-200 bg-neutral-100 p-1 dark:border-neutral-800 dark:bg-neutral-900">
+                                                    <div className="flex h-10 rounded-xl border border-neutral-200 bg-neutral-100 p-0.5 md:h-12 md:rounded-2xl md:p-1 dark:border-neutral-800 dark:bg-neutral-900">
                                                         <button
                                                             type="button"
                                                             onClick={() =>
@@ -999,7 +1110,7 @@ export default function Index({ products, categories, filters }: Props) {
                                                                     'active',
                                                                 )
                                                             }
-                                                            className={`flex-1 rounded-xl text-[12px] font-bold transition-all ${data.status === 'active' ? 'bg-white text-black shadow-sm dark:bg-neutral-800 dark:text-white' : 'text-neutral-500'}`}
+                                                            className={`flex-1 rounded-lg text-[11px] font-bold transition-all md:rounded-xl md:text-[12px] ${data.status === 'active' ? 'bg-white text-black shadow-sm dark:bg-neutral-800 dark:text-white' : 'text-neutral-500'}`}
                                                         >
                                                             Aktif
                                                         </button>
@@ -1011,7 +1122,7 @@ export default function Index({ products, categories, filters }: Props) {
                                                                     'inactive',
                                                                 )
                                                             }
-                                                            className={`flex-1 rounded-xl text-[12px] font-bold transition-all ${data.status === 'inactive' ? 'bg-white text-black shadow-sm dark:bg-neutral-800 dark:text-white' : 'text-neutral-500'}`}
+                                                            className={`flex-1 rounded-lg text-[11px] font-bold transition-all md:rounded-xl md:text-[12px] ${data.status === 'inactive' ? 'bg-white text-black shadow-sm dark:bg-neutral-800 dark:text-white' : 'text-neutral-500'}`}
                                                         >
                                                             Nonaktif
                                                         </button>
@@ -1022,22 +1133,22 @@ export default function Index({ products, categories, filters }: Props) {
                                     </div>
                                 </div>
 
-                                <div className="space-y-6 border-t border-neutral-100 pt-6 dark:border-neutral-900">
-                                    <div className="mb-2 flex items-center gap-3">
-                                        <div className="flex size-8 items-center justify-center rounded-xl bg-neutral-100 text-neutral-500 dark:bg-neutral-900">
+                                <div className="space-y-4 border-t border-neutral-100 pt-5 md:space-y-6 md:pt-6 dark:border-neutral-900">
+                                    <div className="mb-1 flex items-center gap-2 md:mb-2 md:gap-3">
+                                        <div className="flex size-7 items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 md:size-8 md:rounded-xl dark:bg-neutral-900">
                                             <Icon
                                                 icon="solar:dollar-bold-duotone"
-                                                className="size-5"
+                                                className="size-4 md:size-5"
                                             />
                                         </div>
-                                        <h3 className="text-[15px] font-bold tracking-tight text-neutral-900 uppercase dark:text-white">
+                                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 uppercase md:text-[15px] dark:text-white">
                                             Harga & Inventaris
                                         </h3>
                                     </div>
-                                    <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                                        <div className="grid gap-2">
-                                            <Label className="ml-1 text-[12px] font-bold tracking-widest text-neutral-500 uppercase">
-                                                Harga Dasar (Rp){' '}
+                                    <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2">
+                                        <div className="grid gap-1.5 md:gap-2">
+                                            <Label className="ml-1 text-[11px] font-bold tracking-widest text-neutral-500 uppercase md:text-[12px] md:ml-1">
+                                                Harga Jual (Rp){' '}
                                                 <span className="text-red-500">
                                                     *
                                                 </span>
@@ -1047,22 +1158,92 @@ export default function Index({ products, categories, filters }: Props) {
                                                 onChange={(v) =>
                                                     setData('price', v)
                                                 }
-                                                className="h-12 rounded-2xl border-neutral-200 text-[15px] font-bold dark:border-neutral-800"
+                                                className="h-10 rounded-xl border-neutral-200 text-[13px] font-bold md:h-12 md:rounded-2xl md:text-[15px] dark:border-neutral-800"
                                                 placeholder="0"
                                             />
                                         </div>
-                                        <div className="grid gap-2">
-                                            <Label className="ml-1 text-[12px] font-bold tracking-widest text-neutral-500 uppercase">
+                                        <div className="grid gap-1.5 md:gap-2">
+                                            <Label className="ml-1 text-[11px] font-bold tracking-widest text-neutral-500 uppercase md:text-[12px] md:ml-1">
+                                                Modal Awal (Rp)
+                                            </Label>
+                                            <CurrencyInput
+                                                value={data.cost_price}
+                                                onChange={(v) =>
+                                                    setData('cost_price', v)
+                                                }
+                                                className="h-10 rounded-xl border-neutral-200 text-[13px] font-bold md:h-12 md:rounded-2xl md:text-[15px] dark:border-neutral-800"
+                                                placeholder="0"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid gap-1.5 md:gap-2">
+                                        <Label className="ml-1 text-[11px] font-bold tracking-widest text-neutral-500 uppercase md:text-[12px] md:ml-1">
+                                            Barcode
+                                        </Label>
+                                        <div className="flex gap-1.5 md:gap-2">
+                                            <div className="relative flex-1">
+                                                <Input
+                                                    ref={barcodeInputRef}
+                                                    value={data.barcode}
+                                                    onChange={(e) =>
+                                                        setData('barcode', e.target.value)
+                                                    }
+                                                    placeholder="Scan atau ketik barcode..."
+                                                    className="h-10 w-full rounded-xl border-neutral-200 font-mono text-[12px] md:h-12 md:rounded-2xl md:text-[14px] dark:border-neutral-800"
+                                                />
+                                                {isDialogOpen && (
+                                                    <div className="absolute top-1/2 right-2 -translate-y-1/2 flex items-center gap-1 md:right-3 md:gap-1.5">
+                                                        <span className="relative flex size-1.5 md:size-2">
+                                                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                                                            <span className="relative inline-flex size-1.5 rounded-full bg-green-500 md:size-2" />
+                                                        </span>
+                                                        <span className="hidden text-[10px] font-bold text-green-600 tracking-wider uppercase md:block dark:text-green-400">
+                                                            SCAN
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsCameraOpen(true)}
+                                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-neutral-200 bg-card text-muted-foreground hover:bg-accent md:h-12 md:w-12 md:rounded-2xl dark:border-neutral-800"
+                                                title="Scan barcode dengan kamera"
+                                            >
+                                                <Icon
+                                                    icon="solar:camera-bold-duotone"
+                                                    className="size-4 md:size-5"
+                                                />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const gen =
+                                                        'BRC-' +
+                                                        Math.random()
+                                                            .toString(36)
+                                                            .substring(2, 8)
+                                                            .toUpperCase();
+                                                    setData('barcode', gen);
+                                                }}
+                                                className="h-10 shrink-0 rounded-xl border border-neutral-200 bg-card px-3 text-[11px] font-bold text-muted-foreground hover:bg-accent md:h-12 md:rounded-2xl md:px-4 md:text-[12px] dark:border-neutral-800"
+                                            >
+                                                Generate
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-2">
+                                        <div className="grid gap-1.5 md:gap-2">
+                                            <Label className="ml-1 text-[11px] font-bold tracking-widest text-neutral-500 uppercase md:text-[12px] md:ml-1">
                                                 Stock Quantity{' '}
                                                 <span className="text-red-500">
                                                     *
                                                 </span>
                                             </Label>
                                             <div className="relative">
-                                                <div className="absolute top-1/2 left-4 -translate-y-1/2 text-neutral-400">
+                                                <div className="absolute top-1/2 left-3 -translate-y-1/2 text-neutral-400 md:left-4">
                                                     <Icon
                                                         icon="solar:box-bold-duotone"
-                                                        className="size-4"
+                                                        className="size-3.5 md:size-4"
                                                     />
                                                 </div>
                                                 <Input
@@ -1074,19 +1255,19 @@ export default function Index({ products, categories, filters }: Props) {
                                                             e.target.value,
                                                         )
                                                     }
-                                                    className="h-12 rounded-2xl border-neutral-200 pl-11 text-[15px] font-bold dark:border-neutral-800"
+                                                    className="h-10 rounded-xl border-neutral-200 pl-9 text-[13px] font-bold md:h-12 md:rounded-2xl md:pl-11 md:text-[15px] dark:border-neutral-800"
                                                     placeholder="0"
                                                 />
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="grid gap-2">
+                                    <div className="grid gap-1.5 md:gap-2">
                                         <div className="ml-1 flex items-center gap-2">
                                             <Icon
                                                 icon="solar:notes-bold-duotone"
-                                                className="size-4 text-neutral-400"
+                                                className="size-3.5 text-neutral-400 md:size-4"
                                             />
-                                            <Label className="text-[12px] font-bold tracking-widest text-neutral-500 uppercase">
+                                            <Label className="text-[11px] font-bold tracking-widest text-neutral-500 uppercase md:text-[12px]">
                                                 Deskripsi Produk
                                             </Label>
                                         </div>
@@ -1099,20 +1280,20 @@ export default function Index({ products, categories, filters }: Props) {
                                                 )
                                             }
                                             placeholder="Tulis deskripsi detail untuk produk ini..."
-                                            className="min-h-[140px] resize-none rounded-[1.5rem] border-neutral-200 p-5 text-[14px] leading-relaxed font-medium transition-all focus:border-black dark:border-neutral-800 dark:focus:border-white"
+                                            className="min-h-[100px] resize-none rounded-xl border-neutral-200 p-4 text-[13px] leading-relaxed font-medium transition-all focus:border-black md:min-h-[140px] md:rounded-[1.5rem] md:p-5 md:text-[14px] dark:border-neutral-800 dark:focus:border-white"
                                         />
                                     </div>
                                 </div>
 
-                                <div className="space-y-6 border-t border-neutral-100 pt-6 dark:border-neutral-900">
-                                    <div className="mb-4 flex items-center gap-3">
-                                        <div className="flex size-8 items-center justify-center rounded-xl bg-neutral-100 text-neutral-500 dark:bg-neutral-900">
+                                <div className="space-y-4 border-t border-neutral-100 pt-5 md:space-y-6 md:pt-6 dark:border-neutral-900">
+                                    <div className="mb-2 flex items-center gap-2 md:mb-4 md:gap-3">
+                                        <div className="flex size-7 items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 md:size-8 md:rounded-xl dark:bg-neutral-900">
                                             <Icon
                                                 icon="solar:layers-bold-duotone"
-                                                className="size-5"
+                                                className="size-4 md:size-5"
                                             />
                                         </div>
-                                        <h3 className="text-[15px] font-bold tracking-tight text-neutral-900 uppercase dark:text-white">
+                                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 uppercase md:text-[15px] dark:text-white">
                                             Konfigurasi Varian
                                         </h3>
                                     </div>
@@ -1126,19 +1307,19 @@ export default function Index({ products, categories, filters }: Props) {
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-4 border-t border-neutral-100 bg-white p-8 dark:border-neutral-900 dark:bg-neutral-950">
+                        <div className="flex items-center gap-3 border-t border-neutral-100 bg-white p-4 md:gap-4 md:p-8 dark:border-neutral-900 dark:bg-neutral-950">
                             <Button
                                 type="button"
                                 variant="outline"
                                 onClick={() => setIsDialogOpen(false)}
-                                className="h-14 flex-1 rounded-2xl border-neutral-200 font-bold hover:bg-neutral-50 dark:border-neutral-800 dark:hover:bg-neutral-900"
+                                className="h-12 flex-1 rounded-xl border-neutral-200 text-[13px] font-bold hover:bg-neutral-50 md:h-14 md:rounded-2xl md:text-[15px] dark:border-neutral-800 dark:hover:bg-neutral-900"
                             >
                                 Batal
                             </Button>
                             <Button
                                 type="submit"
                                 disabled={processing}
-                                className="flex h-14 flex-[2] items-center gap-3 rounded-2xl bg-black text-[15px] font-bold text-white shadow-xl shadow-black/10 transition-all hover:scale-[1.02] active:scale-[0.98] dark:bg-white dark:text-black dark:shadow-white/5"
+                                className="flex h-12 flex-[2] items-center gap-2 rounded-xl bg-black text-[13px] font-bold text-white shadow-xl shadow-black/10 transition-all hover:scale-[1.02] active:scale-[0.98] md:h-14 md:gap-3 md:rounded-2xl md:text-[15px] dark:bg-white dark:text-black dark:shadow-white/5"
                             >
                                 {processing ? (
                                     <div className="size-5 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -1160,6 +1341,12 @@ export default function Index({ products, categories, filters }: Props) {
                     </form>
                 </DialogContent>
             </Dialog>
+
+            <CameraScanner
+                isOpen={isCameraOpen}
+                onScan={handleCameraScan}
+                onClose={() => setIsCameraOpen(false)}
+            />
 
             <ImportDialog
                 open={isImportOpen}

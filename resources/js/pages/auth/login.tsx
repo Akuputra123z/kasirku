@@ -1,8 +1,8 @@
 'use client';
 
 import { Form, Head } from '@inertiajs/react';
-import { useState } from 'react';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
+import { useState } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';

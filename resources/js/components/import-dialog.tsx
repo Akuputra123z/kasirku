@@ -53,19 +53,24 @@ export function ImportDialog({
         setFile(null);
         setResult(null);
         setIsImporting(false);
-        if (fileInputRef.current) fileInputRef.current.value = ''; // Reset input file HTML
+
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        } // Reset input file HTML
     }, []);
 
     const handleOpenChange = (open: boolean) => {
         if (!open) {
             reset();
         }
+
         onOpenChange(open);
     };
 
     // Fungsi helper untuk validasi ekstensi file
     const isValidFile = (file: File | undefined) => {
         const ext = file?.name?.split('.').pop()?.toLowerCase();
+
         return file && ['xlsx', 'xls', 'csv'].includes(ext ?? '');
     };
 
@@ -86,6 +91,7 @@ export function ImportDialog({
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFile = e.target.files?.[0];
+
         if (selectedFile) {
             if (isValidFile(selectedFile)) {
                 setFile(selectedFile);
@@ -94,13 +100,18 @@ export function ImportDialog({
                 toast.error(
                     'Hanya file Excel (.xlsx, .xls) atau CSV yang didukung.',
                 );
-                if (fileInputRef.current) fileInputRef.current.value = '';
+
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
             }
         }
     };
 
     const handleImport = () => {
-        if (!file) return;
+        if (!file) {
+            return;
+        }
 
         setIsImporting(true);
         setResult(null);
@@ -119,6 +130,7 @@ export function ImportDialog({
 
                 if (importResult) {
                     setResult(importResult);
+
                     if (Number(importResult.errors?.length ?? 0) === 0) {
                         toast.success(
                             `${importResult.imported} data berhasil diimport.`,
@@ -133,6 +145,7 @@ export function ImportDialog({
                     toast.success('File berhasil diproses.');
                     handleOpenChange(false);
                 }
+
                 setIsImporting(false);
             },
             onError: (errors) => {
@@ -263,9 +276,11 @@ export function ImportDialog({
                                             onClick={(e) => {
                                                 e.stopPropagation(); // 🛠️ Mencegah file explorer terbuka kembali saat klik hapus
                                                 setFile(null);
-                                                if (fileInputRef.current)
+
+                                                if (fileInputRef.current) {
                                                     fileInputRef.current.value =
                                                         '';
+                                                }
                                             }}
                                             className="relative z-10 text-xs text-red-500 hover:text-red-600"
                                         >

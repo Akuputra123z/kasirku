@@ -108,7 +108,11 @@ export default function RolesIndex() {
 
     const debouncedSearch = useCallback((value: string) => {
         setSearchInput(value);
-        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
         searchTimeoutRef.current = setTimeout(() => {
             setSearchQuery(value);
         }, 300);
@@ -116,17 +120,23 @@ export default function RolesIndex() {
 
     useEffect(
         () => () => {
-            if (searchTimeoutRef.current)
+            if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
+            }
         },
         [],
     );
 
     const filteredRoles = useMemo(() => {
-        if (!searchQuery) return roles;
+        if (!searchQuery) {
+            return roles;
+        }
+
         const q = searchQuery.toLowerCase();
+
         return roles.filter((role) => {
             const label = roleLabels[role.name] ?? role.name;
+
             return label.toLowerCase().includes(q);
         });
     }, [roles, searchQuery]);
@@ -157,7 +167,10 @@ export default function RolesIndex() {
     const deselectAll = () => setSelectedPermissions([]);
 
     const save = () => {
-        if (!formName.trim()) return;
+        if (!formName.trim()) {
+            return;
+        }
+
         setSaving(true);
 
         if (editing) {
@@ -201,7 +214,10 @@ export default function RolesIndex() {
     };
 
     const confirmDelete = () => {
-        if (!deleteId) return;
+        if (!deleteId) {
+            return;
+        }
+
         router.delete(rolesRoute.destroy(deleteId).url, {
             preserveScroll: true,
             onSuccess: () => {
@@ -498,7 +514,9 @@ export default function RolesIndex() {
             <Dialog
                 open={deleteId !== null}
                 onOpenChange={(open) => {
-                    if (!open) setDeleteId(null);
+                    if (!open) {
+                        setDeleteId(null);
+                    }
                 }}
             >
                 <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-sm">

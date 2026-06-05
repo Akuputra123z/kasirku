@@ -1,7 +1,6 @@
 'use client';
 
 import { Head, router, useForm } from '@inertiajs/react';
-import { useState } from 'react';
 import {
     ExternalLink,
     Pencil,
@@ -12,10 +11,12 @@ import {
     ToggleRight,
     Trash2,
 } from 'lucide-react';
+import { useState } from 'react';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -24,6 +25,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -39,9 +42,6 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { home } from '@/routes';
 
 type TenantRow = {
@@ -83,7 +83,10 @@ export default function AdminTenants({
     };
 
     const saveEdit = () => {
-        if (!editTenant) return;
+        if (!editTenant) {
+            return;
+        }
+
         patch(`/admin/tenants/${editTenant.id}`, {
             preserveState: true,
             onSuccess: () => setEditTenant(null),
@@ -92,6 +95,7 @@ export default function AdminTenants({
 
     const toggleStatus = (tenant: TenantRow) => {
         const isSuspending = tenant.subscription_status === 'active';
+
         if (
             isSuspending &&
             !window.confirm(
@@ -100,6 +104,7 @@ export default function AdminTenants({
         ) {
             return;
         }
+
         router.post(
             `/admin/tenants/${tenant.id}/toggle-status`,
             {},
@@ -115,6 +120,7 @@ export default function AdminTenants({
         ) {
             return;
         }
+
         router.post(
             `/admin/tenants/${tenant.id}/reset`,
             {},
@@ -124,8 +130,15 @@ export default function AdminTenants({
 
     const applyFilters = () => {
         const params: Record<string, string> = {};
-        if (search) params.search = search;
-        if (statusFilter !== 'all') params.status = statusFilter;
+
+        if (search) {
+            params.search = search;
+        }
+
+        if (statusFilter !== 'all') {
+            params.status = statusFilter;
+        }
+
         router.get('/admin/tenants', params, {
             preserveState: true,
             replace: true,
@@ -147,13 +160,17 @@ export default function AdminTenants({
     };
 
     const bulkAction = (action: 'activate' | 'suspend' | 'delete') => {
-        if (selectedIds.length === 0) return;
+        if (selectedIds.length === 0) {
+            return;
+        }
+
         const label =
             action === 'suspend'
                 ? 'suspend'
                 : action === 'delete'
                   ? 'delete'
                   : 'activate';
+
         if (
             !window.confirm(
                 `${label.charAt(0).toUpperCase() + label.slice(1)} ${selectedIds.length} selected store(s)?`,
@@ -161,6 +178,7 @@ export default function AdminTenants({
         ) {
             return;
         }
+
         router.post(
             '/admin/tenants/bulk-action',
             { ids: selectedIds, action },
@@ -196,7 +214,9 @@ export default function AdminTenants({
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     onKeyDown={(e) => {
-                                        if (e.key === 'Enter') applyFilters();
+                                        if (e.key === 'Enter') {
+                                            applyFilters();
+                                        }
                                     }}
                                 />
                             </div>
@@ -205,8 +225,15 @@ export default function AdminTenants({
                                 onValueChange={(v) => {
                                     setStatusFilter(v);
                                     const params: Record<string, string> = {};
-                                    if (search) params.search = search;
-                                    if (v !== 'all') params.status = v;
+
+                                    if (search) {
+                                        params.search = search;
+                                    }
+
+                                    if (v !== 'all') {
+                                        params.status = v;
+                                    }
+
                                     router.get('/admin/tenants', params, {
                                         preserveState: true,
                                         replace: true,
@@ -399,7 +426,9 @@ export default function AdminTenants({
             <Dialog
                 open={editTenant !== null}
                 onOpenChange={(open) => {
-                    if (!open) setEditTenant(null);
+                    if (!open) {
+                        setEditTenant(null);
+                    }
                 }}
             >
                 <DialogContent>

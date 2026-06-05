@@ -2,8 +2,8 @@
 
 import { useForm } from '@inertiajs/react';
 import { Head } from '@inertiajs/react';
-import { FormEventHandler } from 'react';
 import { LogIn, Shield } from 'lucide-react';
+import type { FormEventHandler } from 'react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';

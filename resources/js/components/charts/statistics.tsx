@@ -31,12 +31,15 @@ const StatisticsBlock = ({ stats }: StatisticsBlockProps) => {
     const badgeVariant = (
         val: number | null,
     ): { text: string; style: string } => {
-        if (val === null)
+        if (val === null) {
             return {
                 text: '—',
                 style: 'bg-neutral-200/50 text-muted-foreground',
             };
+        }
+
         const prefix = val >= 0 ? '+' : '';
+
         return {
             text: `${prefix}${val}%`,
             style: val >= 0 ? 'bg-teal-400/10' : 'bg-red-500/10',

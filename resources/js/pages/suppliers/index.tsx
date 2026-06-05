@@ -99,7 +99,11 @@ export default function Index({ suppliers, filters, flash }: Props) {
 
     const debouncedSearch = useCallback((value: string) => {
         setSearchQuery(value);
-        if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+        if (searchTimeoutRef.current) {
+            clearTimeout(searchTimeoutRef.current);
+        }
+
         searchTimeoutRef.current = setTimeout(() => {
             router.get(
                 '/suppliers',
@@ -111,8 +115,9 @@ export default function Index({ suppliers, filters, flash }: Props) {
 
     useEffect(
         () => () => {
-            if (searchTimeoutRef.current)
+            if (searchTimeoutRef.current) {
                 clearTimeout(searchTimeoutRef.current);
+            }
         },
         [],
     );
@@ -150,6 +155,7 @@ export default function Index({ suppliers, filters, flash }: Props) {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
         if (editingSupplier) {
             put(`/suppliers/${editingSupplier.id}`, {
                 onSuccess: () => {
@@ -171,7 +177,10 @@ export default function Index({ suppliers, filters, flash }: Props) {
     };
 
     const confirmDelete = () => {
-        if (!deleteId) return;
+        if (!deleteId) {
+            return;
+        }
+
         router.delete(`/suppliers/${deleteId}`, {
             onSuccess: () => {
                 toast.success('Supplier berhasil dihapus');
@@ -563,7 +572,9 @@ export default function Index({ suppliers, filters, flash }: Props) {
             <Dialog
                 open={!!deleteId}
                 onOpenChange={(open) => {
-                    if (!open) setDeleteId(null);
+                    if (!open) {
+                        setDeleteId(null);
+                    }
                 }}
             >
                 <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[425px]">

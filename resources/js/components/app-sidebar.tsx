@@ -226,6 +226,7 @@ export function AppSidebar() {
         if (!item.permission) {
             return true;
         }
+
         if (isTenant && (isSuperAdmin || centralAdmin)) {
             return true;
         }

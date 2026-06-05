@@ -54,6 +54,7 @@ export function useUsbPrint(): UseUsbPrintResult {
                         (ep: USBEndpoint) =>
                             ep.direction === 'out' && ep.type === 'bulk',
                     );
+
                     if (hasBulkOut) {
                         try {
                             await device.claimInterface(iface.interfaceNumber);
@@ -76,6 +77,7 @@ export function useUsbPrint(): UseUsbPrintResult {
                             const ep = iface.alternate.endpoints.find(
                                 (ep: USBEndpoint) => ep.direction === 'out',
                             );
+
                             if (ep) {
                                 endpoint = ep;
                                 break;
@@ -102,6 +104,7 @@ export function useUsbPrint(): UseUsbPrintResult {
             } catch (err: any) {
                 deviceRef.current = null;
                 setDeviceName(null);
+
                 throw new Error(err?.message || 'Gagal mencetak via USB.');
             } finally {
                 setIsPrinting(false);

@@ -59,7 +59,7 @@ class ProductController extends Controller
         $validated = $request->validated();
 
         if ($request->hasFile('image')) {
-            $validated['image'] = $request->file('image')->store('products', 'public');
+            $validated['image'] = $request->file('image')->store('products/'.tenant_id(), 'public');
         }
 
         $product = Product::create($validated);
@@ -90,7 +90,7 @@ class ProductController extends Controller
             if ($product->image) {
                 Storage::disk('public')->delete($product->image);
             }
-            $validated['image'] = $request->file('image')->store('products', 'public');
+            $validated['image'] = $request->file('image')->store('products/'.tenant_id(), 'public');
         } else {
             unset($validated['image']);
         }
@@ -240,12 +240,12 @@ class ProductController extends Controller
         $rows = $rows[0] ?? [];
 
         if (empty($rows)) {
-            return redirect()->back()->with('flash', [
-                'import' => [
-                    'imported' => 0,
-                    'errors' => ['File Excel kosong atau tidak valid.'],
-                ],
+            session()->flash('import', [
+                'imported' => 0,
+                'errors' => ['File Excel kosong atau tidak valid.'],
             ]);
+
+            return redirect()->back();
         }
 
         $headers = array_map('trim', array_map('strval', $rows[0]));
@@ -277,17 +277,31 @@ class ProductController extends Controller
             // 🛠️ FIX 1: Otomatis bikin kategori baru kalau belum terdaftar
             $category = null;
             if (! blank($rowData['category'] ?? null)) {
-                $category = Category::firstOrCreate([
-                    'name' => $rowData['category'],
-                ]);
+                try {
+                    $category = Category::firstOrCreate([
+                        'tenant_id' => tenant_id(),
+                        'name' => $rowData['category'],
+                    ]);
+                } catch (\Throwable $e) {
+                    $errors[] = "Baris {$rowNumber}: Gagal membuat kategori '{$rowData['category']}'.";
+
+                    continue;
+                }
             }
 
             // 🛠️ FIX 2: Otomatis bikin brand baru juga kalau belum terdaftar (opsional tapi aman)
             $brand = null;
             if (! blank($rowData['brand'] ?? null)) {
-                $brand = Brand::firstOrCreate([
-                    'name' => $rowData['brand'],
-                ]);
+                try {
+                    $brand = Brand::firstOrCreate([
+                        'tenant_id' => tenant_id(),
+                        'name' => $rowData['brand'],
+                    ]);
+                } catch (\Throwable $e) {
+                    $errors[] = "Baris {$rowNumber}: Gagal membuat brand '{$rowData['brand']}'.";
+
+                    continue;
+                }
             }
 
             $status = ! blank($rowData['status'] ?? null) ? strtolower($rowData['status']) : 'active';
@@ -302,6 +316,7 @@ class ProductController extends Controller
 
             if (! blank($barcode)) {
                 $existing = Product::query()
+                    ->where('tenant_id', tenant_id())
                     ->where('barcode', $barcode)
                     ->exists();
 
@@ -312,35 +327,39 @@ class ProductController extends Controller
                 }
             }
 
-            $product = Product::create([
-                'name' => $rowData['name'],
-                'description' => $rowData['description'] ?? null,
-                'price' => (float) $rowData['price'],
-                'cost_price' => ! blank($rowData['cost_price'] ?? null) ? (float) $rowData['cost_price'] : null,
-                'stock' => (int) ($rowData['stock'] ?? 0),
-                'barcode' => $barcode,
-                'category_id' => $category?->id,
-                'brand_id' => $brand?->id,
-                'status' => $status,
-            ]);
+            try {
+                $product = Product::create([
+                    'name' => $rowData['name'],
+                    'description' => $rowData['description'] ?? null,
+                    'price' => (float) $rowData['price'],
+                    'cost_price' => ! blank($rowData['cost_price'] ?? null) ? (float) $rowData['cost_price'] : null,
+                    'stock' => (int) ($rowData['stock'] ?? 0),
+                    'barcode' => $barcode,
+                    'category_id' => $category?->id,
+                    'brand_id' => $brand?->id,
+                    'status' => $status,
+                ]);
 
-            if (blank($barcode)) {
-                $product->barcode = 'BRC-'.$product->tenant_id.'-'.$product->id;
-                $product->save();
+                if (blank($barcode)) {
+                    $product->barcode = 'BRC-'.$product->tenant_id.'-'.$product->id;
+                    $product->save();
+                }
+
+                BarcodeService::bust($product->barcode);
+
+                $imported++;
+            } catch (\Throwable $e) {
+                $errors[] = "Baris {$rowNumber}: Gagal menyimpan produk '{$rowData['name']}' — {$e->getMessage()}";
             }
-
-            BarcodeService::bust($product->barcode);
-
-            $imported++;
         }
 
         // 🛠️ FIX 3: Dibungkus ke dalam array 'flash' -> 'import' agar dibaca oleh React (Inertia)
-        return redirect()->back()->with('flash', [
-            'import' => [
-                'imported' => $imported,
-                'errors' => $errors,
-            ],
+        session()->flash('import', [
+            'imported' => $imported,
+            'errors' => $errors,
         ]);
+
+        return redirect()->back();
     }
 
     public function downloadTemplate(): BinaryFileResponse

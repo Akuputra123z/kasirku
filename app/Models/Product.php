@@ -8,12 +8,28 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
 class Product extends Model
 {
     use HasFactory, HasTenant, LogsActivity, SoftDeletes;
+
+    protected static function booted(): void
+    {
+        static::deleting(function ($product) {
+            if ($product->image) {
+                Storage::disk('public')->delete($product->image);
+            }
+        });
+
+        static::forceDeleting(function ($product) {
+            if ($product->image) {
+                Storage::disk('public')->delete($product->image);
+            }
+        });
+    }
 
     public function getActivitylogOptions(): LogOptions
     {

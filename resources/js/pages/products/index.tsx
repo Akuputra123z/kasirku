@@ -121,6 +121,7 @@ export default function Index({ products, categories, filters }: Props) {
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const nameInputRef = useRef<HTMLInputElement>(null);
     const barcodeInputRef = useRef<HTMLInputElement>(null);
+    const autoCameraOpenedRef = useRef(false);
     const categorySearchRef = useRef<HTMLInputElement>(null);
     const filteredCategories = categories.filter((c) =>
         c.name.toLowerCase().includes(categorySearch.toLowerCase()),
@@ -189,6 +190,24 @@ export default function Index({ products, categories, filters }: Props) {
         }
     }, [lastScanned]);
 
+    const handleBarcodeFocus = useCallback(() => {
+        if (window.innerWidth >= 768) {
+            return;
+        }
+
+        if (autoCameraOpenedRef.current) {
+            return;
+        }
+
+        autoCameraOpenedRef.current = true;
+        setIsCameraOpen(true);
+    }, []);
+
+    const handleCameraClose = useCallback(() => {
+        setIsCameraOpen(false);
+        setTimeout(() => barcodeInputRef.current?.focus(), 100);
+    }, []);
+
     const handleCameraScan = useCallback(
         (barcode: string) => {
             setData('barcode', barcode);
@@ -216,6 +235,7 @@ export default function Index({ products, categories, filters }: Props) {
         clearErrors();
         setCategorySearch('');
         setData('_method', 'POST');
+        autoCameraOpenedRef.current = false;
         setIsDialogOpen(true);
     };
 
@@ -236,6 +256,7 @@ export default function Index({ products, categories, filters }: Props) {
             _method: 'PUT',
         });
         clearErrors();
+        autoCameraOpenedRef.current = false;
         setIsDialogOpen(true);
     };
 
@@ -1188,6 +1209,7 @@ export default function Index({ products, categories, filters }: Props) {
                                                     onChange={(e) =>
                                                         setData('barcode', e.target.value)
                                                     }
+                                                    onFocus={handleBarcodeFocus}
                                                     placeholder="Scan atau ketik barcode..."
                                                     className="h-10 w-full rounded-xl border-neutral-200 font-mono text-[12px] md:h-12 md:rounded-2xl md:text-[14px] dark:border-neutral-800"
                                                 />
@@ -1345,7 +1367,7 @@ export default function Index({ products, categories, filters }: Props) {
             <CameraScanner
                 isOpen={isCameraOpen}
                 onScan={handleCameraScan}
-                onClose={() => setIsCameraOpen(false)}
+                onClose={handleCameraClose}
             />
 
             <ImportDialog

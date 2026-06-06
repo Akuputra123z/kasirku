@@ -131,7 +131,7 @@ export default function Welcome({
 
                             <div className="mt-4 flex flex-wrap items-center gap-4">
                                 <Link
-                                    href={canRegister ? register() : login()}
+                                    href={login()}
                                     className="flex items-center gap-2 rounded-xl bg-[#4648d4] px-8 py-3.5 text-[14px] font-semibold text-white shadow-[0_4px_20px_rgba(70,72,212,0.25)] transition-colors hover:bg-[#2f2ebe]"
                                 >
                                     Mulai Sekarang

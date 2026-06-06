@@ -83,7 +83,6 @@ export default function BarcodeLabel({ product, barcode, barcodeBase64 }: Props)
             <style>{`
                 @media print {
                     @page {
-                        size: 58mm 40mm;
                         margin: 0;
                     }
                     body {

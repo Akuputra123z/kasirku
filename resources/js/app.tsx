@@ -16,6 +16,9 @@ createInertiaApp({
                 return null;
             case name.startsWith('errors/'):
                 return null;
+            case name === 'products/barcode-label':
+            case name === 'products/barcode-labels':
+                return null;
             case name === 'suspended':
             case name === 'admin/login':
             case name.startsWith('auth/'):

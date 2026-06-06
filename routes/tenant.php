@@ -54,8 +54,9 @@ Route::middleware(['web', 'tenant.from-user'])->group(function () {
         Route::post('products/bulk-delete', [ProductController::class, 'bulkDestroy'])->middleware('permission:manage-products')->name('products.bulkDestroy');
         Route::post('products/import', [ProductController::class, 'import'])->middleware('permission:manage-products')->name('products.import');
         Route::get('products/import/template', [ProductController::class, 'downloadTemplate'])->middleware('permission:manage-products')->name('products.import.template');
-        Route::resource('products', ProductController::class)->middleware('permission:manage-products');
         Route::get('products/{product}/barcode-label', [BarcodeLabelController::class, '__invoke'])->middleware('permission:manage-products')->name('products.barcode-label');
+        Route::get('products/barcode-labels', [BarcodeLabelController::class, 'bulk'])->middleware('permission:manage-products')->name('products.barcode-labels');
+        Route::resource('products', ProductController::class)->middleware('permission:manage-products');
 
         Route::middleware('permission:manage-pos')->group(function () {
             Route::get('pos', [TransactionController::class, 'index'])->name('pos.index');

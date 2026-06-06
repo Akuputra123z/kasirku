@@ -31,7 +31,10 @@ export function CameraScanner({ isOpen, onScan, onClose }: CameraScannerProps) {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+        <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+            onPointerDown={(e) => e.stopPropagation()}
+        >
             <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-black shadow-2xl">
                 <div
                     id={containerId}

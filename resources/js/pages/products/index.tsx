@@ -7,6 +7,7 @@ import {
     Download,
     MoreHorizontal,
     Plus,
+    Printer,
     Search,
     X,
     CheckCircle2,
@@ -317,6 +318,18 @@ export default function Index({ products, categories, filters }: Props) {
         }
 
         setConfirmDialog({ open: true, action: 'bulk-delete', loading: false });
+    };
+
+    const handleBulkBarcode = () => {
+        if (selectedIds.length === 0) {
+            return;
+        }
+
+        router.get(
+            route('products.barcode-labels'),
+            { ids: selectedIds.join(',') },
+            { preserveState: true },
+        );
     };
 
     const handleConfirmDelete = () => {
@@ -705,15 +718,26 @@ export default function Index({ products, categories, filters }: Props) {
                 </div>
                 <div className="flex items-center gap-3">
                     {selectedIds.length > 0 && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleBulkDelete}
-                            className="flex h-9 items-center gap-2 rounded-lg border-red-200 px-3 font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
-                        >
-                            <Trash2 className="size-3.5" />
-                            Hapus ({selectedIds.length})
-                        </Button>
+                        <>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleBulkBarcode}
+                                className="flex h-9 items-center gap-2 rounded-lg border-blue-200 px-3 font-medium text-blue-600 hover:bg-blue-50 dark:border-blue-900 dark:text-blue-400 dark:hover:bg-blue-950"
+                            >
+                                <Printer className="size-3.5" />
+                                Cetak Barcode
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleBulkDelete}
+                                className="flex h-9 items-center gap-2 rounded-lg border-red-200 px-3 font-medium text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950"
+                            >
+                                <Trash2 className="size-3.5" />
+                                Hapus ({selectedIds.length})
+                            </Button>
+                        </>
                     )}
                     <span className="text-[13px] text-muted-foreground">
                         {products.total} produk

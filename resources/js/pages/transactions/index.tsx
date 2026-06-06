@@ -2,6 +2,7 @@
 
 import { Head, router, usePage } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Icon } from '@iconify/react';
 import {
     Search,
     ShoppingCart,
@@ -24,6 +25,7 @@ import { toast } from 'sonner';
 import { Receipt as ReceiptComponent } from '@/components/receipt';
 
 import { Button } from '@/components/ui/button';
+import { CameraScanner } from '@/components/camera-scanner';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import {
     Dialog,
@@ -358,6 +360,7 @@ export default function POS({
     const [localCustomers, setLocalCustomers] = useState<Customer[]>([]);
     const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
     const [cartSheetOpen, setCartSheetOpen] = useState(false);
+    const [isCameraOpen, setIsCameraOpen] = useState(false);
     const {
         print: usbPrint,
         isSupported: webUsbSupported,
@@ -847,6 +850,18 @@ export default function POS({
         enabled: true,
     });
 
+    const handleCameraScan = useCallback(
+        (barcode: string) => {
+            handleBarcodeScanned(barcode);
+            setIsCameraOpen(false);
+        },
+        [handleBarcodeScanned],
+    );
+
+    const handleCameraClose = useCallback(() => {
+        setIsCameraOpen(false);
+    }, []);
+
     // ─────────────────────────────────────────────────────────────────────────
 
     return (
@@ -889,12 +904,25 @@ export default function POS({
                                         setExpandedProductId(null);
                                     }}
                                     placeholder="Cari produk atau kategori..."
-                                    className="h-10 w-full rounded-xl border border-border bg-background pr-20 pl-9 text-[16px] transition-all outline-none placeholder:text-muted-foreground/60 focus:border-primary focus:ring-1 focus:ring-primary md:text-[13px]"
+                                    className="h-10 w-full rounded-xl border border-border bg-background pr-28 pl-9 text-[16px] transition-all outline-none placeholder:text-muted-foreground/60 focus:border-primary focus:ring-1 focus:ring-primary md:text-[13px]"
                                     autoComplete="off"
                                 />
-                                <div className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 rounded-md bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700 dark:bg-green-900/40 dark:text-green-400">
-                                    <div className="size-1.5 animate-pulse rounded-full bg-green-600 dark:bg-green-400" />
-                                    SCAN
+                                <div className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1">
+                                    <div className="flex items-center gap-1 rounded-md bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700 dark:bg-green-900/40 dark:text-green-400">
+                                        <div className="size-1.5 animate-pulse rounded-full bg-green-600 dark:bg-green-400" />
+                                        SCAN
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsCameraOpen(true)}
+                                        className="flex size-7 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-accent"
+                                        title="Scan barcode dengan kamera"
+                                    >
+                                        <Icon
+                                            icon="solar:camera-bold-duotone"
+                                            className="size-3.5"
+                                        />
+                                    </button>
                                 </div>
                             </div>
 
@@ -1896,6 +1924,12 @@ export default function POS({
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <CameraScanner
+                isOpen={isCameraOpen}
+                onScan={handleCameraScan}
+                onClose={handleCameraClose}
+            />
         </>
     );
 }

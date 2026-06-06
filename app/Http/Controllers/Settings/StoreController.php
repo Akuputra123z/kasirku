@@ -55,7 +55,7 @@ class StoreController extends Controller
             if ($tenant->logo) {
                 Storage::disk('public')->delete($tenant->logo);
             }
-            $tenant->logo = $request->file('logo')->store('logos', 'public');
+            $tenant->logo = $request->file('logo')->store('logos/'.$tenant->id, 'public');
         }
 
         if (isset($validated['color_theme'])) {

@@ -5,11 +5,21 @@ namespace App\Models;
 use Database\Factories\TenantFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class Tenant extends Model
 {
     /** @use HasFactory<TenantFactory> */
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::deleting(function ($tenant) {
+            if ($tenant->logo) {
+                Storage::disk('public')->delete($tenant->logo);
+            }
+        });
+    }
 
     protected $fillable = [
         'id',

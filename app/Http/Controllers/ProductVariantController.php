@@ -22,6 +22,7 @@ class ProductVariantController extends Controller
             'variants.*.additional_price' => 'required|numeric|min:0',
             'variants.*.stock' => 'required|integer|min:0',
             'variants.*.sku' => 'nullable|string|max:100',
+            'variants.*.weight' => ['nullable', 'integer', 'min:0'],
         ]);
 
         try {
@@ -40,6 +41,7 @@ class ProductVariantController extends Controller
                             'additional_price' => $variantData['additional_price'],
                             'stock' => $variantData['stock'],
                             'sku' => $variantData['sku'] ?? null,
+                            'weight' => $variantData['weight'] ?? null,
                         ]
                     );
                 }

@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
-use App\Traits\HasTenant;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -15,28 +15,40 @@ use Spatie\Activitylog\Support\LogOptions;
 class Customer extends Model
 {
     /** @use HasFactory<CustomerFactory> */
-    use HasFactory, HasTenant, LogsActivity, SoftDeletes;
+    use HasFactory, LogsActivity, SoftDeletes;
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['name', 'email', 'phone', 'loyalty_points'])
+            ->logOnly(['name', 'email', 'phone'])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
     }
 
     protected $fillable = [
-        'tenant_id',
+        'user_id',
         'name',
         'email',
         'phone',
         'address',
-        'loyalty_points',
     ];
 
-    protected $casts = [
-        'loyalty_points' => 'integer',
-    ];
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function stores(): BelongsToMany
+    {
+        return $this->belongsToMany(Tenant::class, 'store_customer')
+            ->withPivot(['loyalty_points', 'total_spent', 'last_visit_at', 'notes'])
+            ->withTimestamps();
+    }
+
+    public function storeCustomer()
+    {
+        return $this->hasMany(StoreCustomer::class);
+    }
 
     public function transactions(): HasMany
     {
@@ -53,5 +65,15 @@ class Customer extends Model
     public function pointTransactions(): HasMany
     {
         return $this->hasMany(PointTransaction::class);
+    }
+
+    public function addresses(): HasMany
+    {
+        return $this->hasMany(CustomerAddress::class);
+    }
+
+    public function bankAccounts(): HasMany
+    {
+        return $this->hasMany(CustomerBankAccount::class);
     }
 }

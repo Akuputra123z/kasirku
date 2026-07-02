@@ -18,7 +18,6 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('manage-shifts', fn ($user) => $user->can('manage-shifts'));
         Gate::define('view-reports', fn ($user) => $user->can('view-reports'));
         Gate::define('export-reports', fn ($user) => $user->can('export-reports'));
-        Gate::define('view-chat', fn ($user) => $user->can('view-chat'));
         Gate::define('manage-settings', fn ($user) => $user->can('manage-settings'));
         Gate::define('manage-users', fn ($user) => $user->can('manage-users'));
         Gate::define('manage-vouchers', fn ($user) => $user->can('manage-vouchers'));

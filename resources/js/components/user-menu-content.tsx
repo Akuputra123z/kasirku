@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { LogOut, Settings } from 'lucide-react';
+import { LogOut, Settings, Store } from 'lucide-react';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
@@ -24,6 +24,8 @@ export function UserMenuContent({ user }: Props) {
         router.flushAll();
     };
 
+    const canMarketplace = user.has_customer_account || user.has_store;
+
     return (
         <>
             <DropdownMenuLabel className="p-0 font-normal">
@@ -33,6 +35,18 @@ export function UserMenuContent({ user }: Props) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
+                {canMarketplace && (
+                    <DropdownMenuItem asChild>
+                        <Link
+                            className="block w-full cursor-pointer"
+                            href="/customer/dashboard"
+                            onClick={cleanup}
+                        >
+                            <Store className="mr-2" />
+                            Marketplace
+                        </Link>
+                    </DropdownMenuItem>
+                )}
                 <DropdownMenuItem asChild>
                     <Link
                         className="block w-full cursor-pointer"

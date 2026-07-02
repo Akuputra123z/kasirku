@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Customer;
+use App\Models\Order;
 use App\Models\PaymentMethod;
 use App\Models\Shift;
 use App\Models\Transaction;
@@ -186,8 +187,66 @@ class ReportExport implements WithMultipleSheets
             ->sortByDesc('total_spent')
             ->values();
 
+        $marketplaceOrders = Order::marketplace()
+            ->whereIn('status', ['delivered', 'completed'])
+            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->with('items')
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->map(fn ($order) => [
+                'order_number' => $order->order_number,
+                'customer_name' => $order->recipient_name,
+                'phone' => $order->customer_phone ?? '-',
+                'items_count' => $order->items->count(),
+                'subtotal' => (float) $order->subtotal,
+                'shipping_cost' => (float) $order->shipping_cost,
+                'total' => (float) $order->total,
+                'status' => $order->status,
+                'payment_method' => $order->payment_method ?? '-',
+                'date' => $order->created_at,
+            ]);
+
+        $marketplaceSummary = Order::marketplace()
+            ->whereIn('status', ['delivered', 'completed'])
+            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->selectRaw('
+                COUNT(*) as total_orders,
+                COALESCE(SUM(total), 0) as total_revenue,
+                COALESCE(SUM(shipping_cost), 0) as total_shipping,
+                COALESCE(SUM(subtotal), 0) as total_subtotal
+            ')
+            ->first();
+
+        $ppobOrders = Order::ppob()
+            ->where('status', 'success')
+            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->latest()
+            ->limit(100)
+            ->get()
+            ->map(fn ($order) => [
+                'order_number' => $order->order_number,
+                'customer_name' => $order->ppob_customer_name ?? $order->recipient_name,
+                'category' => $order->ppob_category ?? '-',
+                'brand' => $order->ppob_brand ?? '-',
+                'total' => (float) $order->total,
+                'markup' => (float) ($order->ppob_markup ?? 0),
+                'status' => $order->status,
+                'date' => $order->created_at,
+            ]);
+
+        $ppobSummary = Order::ppob()
+            ->where('status', 'success')
+            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->selectRaw('
+                COUNT(*) as total_orders,
+                COALESCE(SUM(total), 0) as total_revenue,
+                COALESCE(SUM(ppob_markup), 0) as total_margin
+            ')
+            ->first();
+
         return [
-            'Ringkasan' => new class($summary, $startDate, $endDate, $paymentMethods, $orderTypes) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
+            'Ringkasan' => new class($summary, $startDate, $endDate, $paymentMethods, $orderTypes, $marketplaceSummary, $ppobSummary) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
             {
                 public function __construct(
                     protected $summary,
@@ -195,6 +254,8 @@ class ReportExport implements WithMultipleSheets
                     protected string $endDate,
                     protected $paymentMethods,
                     protected $orderTypes,
+                    protected $marketplaceSummary,
+                    protected $ppobSummary,
                 ) {}
 
                 public function title(): string
@@ -223,13 +284,25 @@ class ReportExport implements WithMultipleSheets
                         ['', ''],
                         ['RINGKASAN UMUM', ''],
                         ['Total Transaksi', $this->summary->total_transactions],
-                        ['Total Pendapatan', $this->summary->total_revenue],
+                        ['Total Pendapatan (POS)', $this->summary->total_revenue],
                         ['Total Subtotal', $this->summary->total_subtotal],
                         ['Total Pajak', $this->summary->total_tax],
                         ['Total Diskon', $this->summary->total_discount],
                         ['Total Dibayar', $this->summary->total_paid],
                         ['Total Kembalian', $this->summary->total_change],
                         ['Rata-rata Transaksi', round($this->summary->avg_transaction, 2)],
+                        ['', ''],
+                        ['PENDAPATAN MARKETPLACE', ''],
+                        ['Total Pesanan Marketplace', $this->marketplaceSummary->total_orders],
+                        ['Pendapatan Marketplace', $this->marketplaceSummary->total_revenue],
+                        ['Biaya Kirim', $this->marketplaceSummary->total_shipping],
+                        ['', ''],
+                        ['PENDAPATAN PPOB', ''],
+                        ['Total Transaksi PPOB', $this->ppobSummary->total_orders],
+                        ['Pendapatan PPOB', $this->ppobSummary->total_revenue],
+                        ['Total Margin PPOB', $this->ppobSummary->total_margin],
+                        ['', ''],
+                        ['TOTAL PENDAPATAN', $this->summary->total_revenue + $this->marketplaceSummary->total_revenue + $this->ppobSummary->total_revenue],
                         ['', ''],
                     ];
 
@@ -577,6 +650,92 @@ class ReportExport implements WithMultipleSheets
                         $c['name'], $c['phone'], $c['email'], $c['points'],
                         $c['count'], $c['total_spent'], round($c['avg_spent'], 2), $c['max_transaction'],
                     ])->toArray();
+                }
+            },
+            'Marketplace' => new class($marketplaceOrders, $marketplaceSummary) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
+            {
+                public function __construct(protected $marketplaceOrders, protected $marketplaceSummary) {}
+
+                public function title(): string
+                {
+                    return 'Marketplace';
+                }
+
+                public function headings(): array
+                {
+                    return [
+                        'No. Pesanan', 'Pelanggan', 'Telepon', 'Item',
+                        'Subtotal', 'Ongkir', 'Total', 'Status', 'Pembayaran', 'Tanggal',
+                    ];
+                }
+
+                public function styles(Worksheet $sheet): array
+                {
+                    return [
+                        1 => ['font' => ['bold' => true], 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '4472C4']], 'font' => ['color' => ['rgb' => 'FFFFFF']]],
+                    ];
+                }
+
+                public function array(): array
+                {
+                    $rows = $this->marketplaceOrders->map(fn ($o) => [
+                        $o['order_number'], $o['customer_name'], $o['phone'], $o['items_count'],
+                        $o['subtotal'], $o['shipping_cost'], $o['total'],
+                        ucfirst($o['status']), $o['payment_method'], $o['date'],
+                    ])->toArray();
+
+                    $rows[] = ['', '', '', '', '', '', '', '', '', ''];
+                    $rows[] = [
+                        'TOTAL', '', '', '',
+                        $this->marketplaceSummary->total_subtotal,
+                        $this->marketplaceSummary->total_shipping,
+                        $this->marketplaceSummary->total_revenue,
+                        '', '', '('.$this->marketplaceSummary->total_orders.' pesanan)',
+                    ];
+
+                    return $rows;
+                }
+            },
+            'PPOB' => new class($ppobOrders, $ppobSummary) implements FromArray, ShouldAutoSize, WithHeadings, WithStyles, WithTitle
+            {
+                public function __construct(protected $ppobOrders, protected $ppobSummary) {}
+
+                public function title(): string
+                {
+                    return 'PPOB';
+                }
+
+                public function headings(): array
+                {
+                    return [
+                        'No. Pesanan', 'Pelanggan', 'Kategori', 'Brand',
+                        'Total', 'Margin', 'Status', 'Tanggal',
+                    ];
+                }
+
+                public function styles(Worksheet $sheet): array
+                {
+                    return [
+                        1 => ['font' => ['bold' => true], 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '4472C4']], 'font' => ['color' => ['rgb' => 'FFFFFF']]],
+                    ];
+                }
+
+                public function array(): array
+                {
+                    $rows = $this->ppobOrders->map(fn ($o) => [
+                        $o['order_number'], $o['customer_name'], $o['category'], $o['brand'],
+                        $o['total'], $o['markup'], ucfirst($o['status']), $o['date'],
+                    ])->toArray();
+
+                    $rows[] = ['', '', '', '', '', '', '', ''];
+                    $rows[] = [
+                        'TOTAL', '', '', '',
+                        $this->ppobSummary->total_revenue,
+                        $this->ppobSummary->total_margin,
+                        '', '('.$this->ppobSummary->total_orders.' transaksi)',
+                    ];
+
+                    return $rows;
                 }
             },
         ];

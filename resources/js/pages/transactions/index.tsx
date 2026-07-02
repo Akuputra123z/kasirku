@@ -1029,30 +1029,28 @@ export default function POS({
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-start justify-between gap-1">
-                                                        <p className="truncate text-[12px] leading-tight font-bold text-foreground">
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="pr-1 text-[12px] leading-tight font-bold text-foreground">
                                                             {item.name}
                                                         </p>
-                                                        <p className="shrink-0 text-[12px] font-bold whitespace-nowrap text-foreground">
+                                                        <p className="mt-0.5 text-right text-[12px] font-bold text-foreground">
                                                             {fmt(
                                                                 item.price *
                                                                     item.quantity,
                                                             )}
                                                         </p>
-                                                    </div>
-                                                    {item.selectedVariant && (
-                                                        <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                                                            Variant:{' '}
-                                                            {
-                                                                item
-                                                                    .selectedVariant
-                                                                    .name
-                                                            }
-                                                        </p>
-                                                    )}
-                                                    <div className="mt-1.5 flex items-center gap-1.5">
-                                                        <div className="flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5">
+                                                        {item.selectedVariant && (
+                                                            <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                                                                Variant:{' '}
+                                                                {
+                                                                    item
+                                                                        .selectedVariant
+                                                                        .name
+                                                                }
+                                                            </p>
+                                                        )}
+                                                        <div className="mt-1.5 flex items-center gap-1">
+                                                            <div className="flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5">
                                                             <button
                                                                 onClick={() =>
                                                                     updateQty(
@@ -1273,17 +1271,15 @@ export default function POS({
                                                 )}
                                             </div>
                                             <div className="min-w-0 flex-1">
-                                                <div className="flex items-start justify-between gap-1">
-                                                    <p className="truncate text-[12px] leading-tight font-bold text-foreground">
-                                                        {item.name}
-                                                    </p>
-                                                    <p className="shrink-0 text-[12px] font-bold whitespace-nowrap text-foreground">
-                                                        {fmt(
-                                                            item.price *
-                                                                item.quantity,
-                                                        )}
-                                                    </p>
-                                                </div>
+                                                <p className="pr-1 text-[12px] leading-tight font-bold text-foreground">
+                                                    {item.name}
+                                                </p>
+                                                <p className="mt-0.5 text-right text-[12px] font-bold text-foreground">
+                                                    {fmt(
+                                                        item.price *
+                                                            item.quantity,
+                                                    )}
+                                                </p>
                                                 {item.selectedVariant && (
                                                     <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
                                                         Variant:{' '}

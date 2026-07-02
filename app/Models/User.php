@@ -3,30 +3,29 @@
 namespace App\Models;
 
 use App\Notifications\EmailOtpVerification;
-use App\Traits\HasTenant;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Spatie\Activitylog\Models\Concerns\CausesActivity;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['tenant_id', 'name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'password', 'email_verified_at', 'profile_photo_path'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
-    use CausesActivity, HasFactory, HasRoles, HasTenant, Notifiable, TwoFactorAuthenticatable;
+    use CausesActivity, HasFactory, HasRoles, Notifiable, TwoFactorAuthenticatable;
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
+    protected $appends = ['has_customer_account', 'has_store', 'profile_photo_url'];
+
     protected function casts(): array
     {
         return [
@@ -47,5 +46,57 @@ class User extends Authenticatable implements MustVerifyEmail
         ])->save();
 
         $this->notify(new EmailOtpVerification($code));
+    }
+
+    public function tenantUsers(): HasMany
+    {
+        return $this->hasMany(TenantUser::class);
+    }
+
+    public function activeTenantUser(): HasOne
+    {
+        return $this->hasOne(TenantUser::class)->where('is_active', true);
+    }
+
+    public function customer(): HasOne
+    {
+        return $this->hasOne(Customer::class);
+    }
+
+    public function carts(): HasMany
+    {
+        return $this->hasMany(Cart::class);
+    }
+
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    public function isOwner(): bool
+    {
+        return $this->tenantUsers()->where('role', 'owner')->exists();
+    }
+
+    public function isStaff(): bool
+    {
+        return $this->tenantUsers()->where('role', 'staff')->exists();
+    }
+
+    public function getHasCustomerAccountAttribute(): bool
+    {
+        return $this->customer()->exists();
+    }
+
+    public function getHasStoreAttribute(): bool
+    {
+        return $this->tenantUsers()->exists();
+    }
+
+    public function getProfilePhotoUrlAttribute(): ?string
+    {
+        return $this->profile_photo_path
+            ? Storage::url($this->profile_photo_path)
+            : null;
     }
 }

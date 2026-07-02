@@ -12,6 +12,7 @@ interface ProductVariant {
     name: string;
     additional_price: number | string;
     stock: number | string;
+    weight?: number | string | null;
     sku: string | null;
 }
 
@@ -24,7 +25,7 @@ export function VariantManager({ variants, onChange }: VariantManagerProps) {
     const addVariant = () => {
         onChange([
             ...variants,
-            { name: '', additional_price: 0, stock: 0, sku: '' },
+            { name: '', additional_price: 0, stock: 0, weight: '', sku: '' },
         ]);
     };
 
@@ -87,7 +88,7 @@ export function VariantManager({ variants, onChange }: VariantManagerProps) {
                             key={index}
                             className="group relative grid animate-in grid-cols-1 gap-4 rounded-[1.5rem] border border-neutral-200 bg-white p-5 shadow-sm transition-all duration-300 fade-in slide-in-from-top-2 hover:border-neutral-300 hover:shadow-md md:grid-cols-12 dark:border-neutral-800 dark:bg-neutral-900 dark:hover:border-neutral-700"
                         >
-                            <div className="space-y-2 md:col-span-4">
+                            <div className="space-y-2 md:col-span-3">
                                 <div className="ml-1 flex items-center gap-2">
                                     <Icon
                                         icon="solar:pen-new-square-bold-duotone"
@@ -153,13 +154,8 @@ export function VariantManager({ variants, onChange }: VariantManagerProps) {
                                     value={variant.stock}
                                     onChange={(e) => {
                                         const val = e.target.value;
-
                                         if (val.startsWith('-')) {
-                                            updateVariant(
-                                                index,
-                                                'stock',
-                                                val.replace('-', ''),
-                                            );
+                                            updateVariant(index, 'stock', val.replace('-', ''));
                                         } else {
                                             updateVariant(index, 'stock', val);
                                         }
@@ -169,6 +165,28 @@ export function VariantManager({ variants, onChange }: VariantManagerProps) {
                             </div>
 
                             <div className="space-y-2 md:col-span-2">
+                                <div className="ml-1 flex items-center gap-2">
+                                    <Icon
+                                        icon="solar:scales-bold-duotone"
+                                        className="size-3 text-neutral-400"
+                                    />
+                                    <Label className="text-[10px] font-black tracking-wider text-neutral-400 uppercase">
+                                        Weight (g)
+                                    </Label>
+                                </div>
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    placeholder="0"
+                                    value={variant.weight ?? ''}
+                                    onChange={(e) =>
+                                        updateVariant(index, 'weight', e.target.value)
+                                    }
+                                    className="h-10 rounded-xl border-neutral-100 bg-neutral-50/50 text-center text-[13px] font-bold transition-all focus:bg-white dark:border-neutral-800 dark:bg-neutral-950/50 dark:focus:bg-neutral-950"
+                                />
+                            </div>
+
+                            <div className="space-y-2 md:col-span-1">
                                 <div className="ml-1 flex items-center gap-2">
                                     <Icon
                                         icon="solar:qr-code-bold-duotone"

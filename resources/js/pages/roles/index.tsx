@@ -63,7 +63,6 @@ const permissionLabels: Record<string, string> = {
     'manage-shifts': 'Kelola Shift',
     'view-reports': 'Lihat Laporan',
     'export-reports': 'Ekspor Laporan',
-    'view-chat': 'Chat AI',
     'manage-settings': 'Pengaturan',
     'manage-users': 'Kelola Pengguna',
     'manage-vouchers': 'Kelola Voucher',
@@ -78,7 +77,6 @@ const permissionGroups: Record<string, string[]> = {
     ],
     Transaksi: ['manage-pos', 'view-history', 'manage-shifts'],
     Laporan: ['view-reports', 'export-reports'],
-    Alat: ['view-chat'],
     Pengaturan: ['manage-settings', 'manage-users'],
     Promo: ['manage-vouchers'],
 };

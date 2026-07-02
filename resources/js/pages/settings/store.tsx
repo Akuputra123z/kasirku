@@ -1,7 +1,7 @@
 'use client';
 import { Icon } from '@iconify/react';
 import { Head, useForm, usePage } from '@inertiajs/react';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
@@ -18,6 +18,14 @@ export default function StoreSettings() {
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
     const currentTheme = (tenant?.color_theme ?? 'default') as ColorTheme;
 
+    const [provinces, setProvinces] = useState<{ id: number; name: string }[]>([]);
+    const [cities, setCities] = useState<{ id: number; name: string }[]>([]);
+    const [loadingCities, setLoadingCities] = useState(false);
+    const [loadingDistricts, setLoadingDistricts] = useState(false);
+    const [districts, setDistricts] = useState<{ id: number; name: string }[]>([]);
+    const [selectedProvinceId, setSelectedProvinceId] = useState('');
+    const [selectedCityId, setSelectedCityId] = useState('');
+
     const { data, setData, post, processing, errors } = useForm<{
         name: string;
         address: string;
@@ -32,6 +40,11 @@ export default function StoreSettings() {
         print_network_host: string;
         print_network_port: number;
         print_windows_printer: string;
+        city: string;
+        province: string;
+        rajaongkir_city_id: string;
+        shipping_cost: number;
+        store_description: string;
         _method: 'PATCH';
     }>({
         name: tenant?.name ?? '',
@@ -59,6 +72,11 @@ export default function StoreSettings() {
         print_windows_printer:
             (tenant as any)?.settings?.printing?.connectors?.windows?.printer ??
             '',
+        city: (tenant as any)?.city ?? '',
+        province: (tenant as any)?.province ?? '',
+        rajaongkir_city_id: (tenant as any)?.rajaongkir_city_id ?? '',
+        shipping_cost: (tenant as any)?.shipping_cost ?? 0,
+        store_description: (tenant as any)?.store_description ?? '',
         _method: 'PATCH',
     });
 
@@ -75,7 +93,6 @@ export default function StoreSettings() {
             },
             onError: (err) => {
                 const firstError = Object.values(err)[0];
-
                 if (firstError) {
                     toast.error(firstError as string);
                 }
@@ -86,7 +103,6 @@ export default function StoreSettings() {
 
     const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-
         if (file) {
             setData('logo', file);
             const reader = new FileReader();
@@ -98,6 +114,47 @@ export default function StoreSettings() {
     const handleThemeChange = (presetId: string) => {
         setData('color_theme', presetId as ColorTheme);
     };
+
+    const fetchProvinces = useCallback(async () => {
+        try {
+            const res = await fetch('/rajaongkir/provinces');
+            const data = await res.json();
+            if (Array.isArray(data)) setProvinces(data);
+        } catch {}
+    }, []);
+
+    const fetchDistricts = useCallback(async (cityId?: string) => {
+        if (!cityId) { setDistricts([]); return; }
+        setLoadingDistricts(true);
+        try {
+            const res = await fetch(`/rajaongkir/districts/${cityId}`);
+            const data = await res.json();
+            if (Array.isArray(data)) setDistricts(data);
+        } catch {} finally {
+            setLoadingDistricts(false);
+        }
+    }, []);
+
+    const fetchCities = useCallback(async (provinceId?: string) => {
+        if (!provinceId) { setCities([]); return; }
+        setLoadingCities(true);
+        try {
+            const res = await fetch(`/rajaongkir/cities/${provinceId}`);
+            const data = await res.json();
+            if (Array.isArray(data)) setCities(data);
+        } catch {} finally {
+            setLoadingCities(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchProvinces(); }, [fetchProvinces]);
+
+    useEffect(() => {
+        if (provinces.length > 0 && data.province) {
+            const p = provinces.find(p => p.name === data.province);
+            if (p) setSelectedProvinceId(String(p.id));
+        }
+    }, [provinces, data.province]);
 
     return (
         <>
@@ -157,6 +214,127 @@ export default function StoreSettings() {
                             Appears at the bottom of printed receipts
                         </p>
                         <InputError message={errors.receipt_footer} />
+                    </div>
+
+                    <div className="border-t border-neutral-200 pt-6 dark:border-neutral-800">
+                        <div className="mb-4 flex items-center gap-2">
+                            <Icon
+                                icon="solar:cart-bold-duotone"
+                                className="size-5 text-neutral-400"
+                            />
+                            <Label className="text-[12px] font-bold tracking-widest text-neutral-500 uppercase">
+                                Marketplace & Shipping Settings
+                            </Label>
+                        </div>
+
+                        <div className="grid gap-6">
+                            <div className="grid gap-3 sm:grid-cols-3">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="province">Province</Label>
+                                    <select
+                                        id="province"
+                                        value={selectedProvinceId}
+                                        onChange={(e) => {
+                                            const p = provinces.find(p => String(p.id) === e.target.value);
+                                            setSelectedProvinceId(e.target.value);
+                                            setSelectedCityId('');
+                                            setDistricts([]);
+                                            setData('province', p?.name ?? '');
+                                            setData('rajaongkir_city_id', '');
+                                            setData('city', '');
+                                            fetchCities(e.target.value);
+                                        }}
+                                        className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-800 dark:bg-neutral-950 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+                                    >
+                                        <option value="">Select Province</option>
+                                        {provinces.map((p) => (
+                                            <option key={p.id} value={String(p.id)}>
+                                                {p.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <InputError message={errors.province} />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="citySelect">City</Label>
+                                    <select
+                                        id="citySelect"
+                                        value={selectedCityId}
+                                        onChange={(e) => {
+                                            const c = cities.find(c => String(c.id) === e.target.value);
+                                            setSelectedCityId(e.target.value);
+                                            setData('rajaongkir_city_id', '');
+                                            setData('city', c?.name ?? '');
+                                            fetchDistricts(e.target.value);
+                                        }}
+                                        disabled={loadingCities || !selectedProvinceId}
+                                        className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-800 dark:bg-neutral-950 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+                                    >
+                                        <option value="">{loadingCities ? 'Loading...' : 'Select City'}</option>
+                                        {cities.map((c) => (
+                                            <option key={c.id} value={String(c.id)}>
+                                                {c.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="rajaongkir_city_id">District</Label>
+                                    <select
+                                        id="rajaongkir_city_id"
+                                        value={data.rajaongkir_city_id}
+                                        onChange={(e) => {
+                                            const d = districts.find(d => String(d.id) === e.target.value);
+                                            setData('rajaongkir_city_id', e.target.value);
+                                            if (d) setData('city', d.name);
+                                        }}
+                                        disabled={loadingDistricts || !selectedCityId}
+                                        className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-800 dark:bg-neutral-950 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+                                    >
+                                        <option value="">{loadingDistricts ? 'Loading...' : 'Select District'}</option>
+                                        {districts.map((d) => (
+                                            <option key={d.id} value={String(d.id)}>
+                                                {d.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <InputError message={errors.rajaongkir_city_id} />
+                                </div>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="shipping_cost">Shipping Cost (Rp)</Label>
+                                    <Input
+                                        id="shipping_cost"
+                                        type="number"
+                                        value={data.shipping_cost}
+                                        onChange={(e) =>
+                                            setData('shipping_cost', parseFloat(e.target.value) || 0)
+                                        }
+                                        placeholder="0"
+                                    />
+                                    <p className="text-[11px] font-medium text-neutral-400">
+                                        Flat shipping cost used as fallback when RajaOngkir is unavailable
+                                    </p>
+                                    <InputError message={errors.shipping_cost} />
+                                </div>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="store_description">Store Description</Label>
+                                <Textarea
+                                    id="store_description"
+                                    value={data.store_description}
+                                    onChange={(e) =>
+                                        setData('store_description', e.target.value)
+                                    }
+                                    placeholder="Describe your store for the marketplace"
+                                    rows={3}
+                                />
+                                <InputError message={errors.store_description} />
+                            </div>
+                        </div>
                     </div>
 
                     <div className="border-t border-neutral-200 pt-6 dark:border-neutral-800">

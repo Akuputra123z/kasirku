@@ -7,7 +7,15 @@ export type Tenant = {
     logo: string | null;
     logo_url: string | null;
     color_theme: string;
+    subscription_tier?: string;
+    subscription_expires_at?: string | null;
     points_per_currency?: number;
     point_value?: number;
     min_redeem_points?: number;
+    city?: string;
+    province?: string;
+    rajaongkir_city_id?: string;
+    shipping_cost?: number;
+    store_description?: string;
+    store_banner?: string | null;
 };

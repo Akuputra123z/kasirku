@@ -10,7 +10,12 @@ class ProductVariant extends Model
 {
     use HasTenant;
 
-    protected $fillable = ['tenant_id', 'stock', 'sku', 'product_id', 'name', 'additional_price'];
+    protected $fillable = ['tenant_id', 'stock', 'sku', 'product_id', 'name', 'additional_price', 'weight'];
+
+    protected $casts = [
+        'additional_price' => 'float',
+        'weight' => 'integer',
+    ];
 
     public function product(): BelongsTo
     {

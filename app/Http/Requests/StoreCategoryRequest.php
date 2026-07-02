@@ -17,6 +17,7 @@ class StoreCategoryRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255', Rule::unique('categories', 'name')->whereNull('deleted_at')->where('tenant_id', tenant_id())],
             'description' => ['nullable', 'string', 'max:500'],
+            'marketplace_category_id' => ['nullable', 'integer', 'exists:marketplace_categories,id'],
         ];
     }
 }

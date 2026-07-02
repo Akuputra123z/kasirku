@@ -45,11 +45,21 @@ class StoreController extends Controller
             'print_network_host' => ['nullable', 'string', 'max:255'],
             'print_network_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
             'print_windows_printer' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:255'],
+            'province' => ['nullable', 'string', 'max:255'],
+            'rajaongkir_city_id' => ['nullable', 'string', 'max:10'],
+            'shipping_cost' => ['nullable', 'numeric', 'min:0', 'max:999999999'],
+            'store_description' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $tenant->name = $validated['name'];
         $tenant->address = $validated['address'] ?? '';
         $tenant->phone = $validated['phone'] ?? '';
+        $tenant->city = $validated['city'] ?? '';
+        $tenant->province = $validated['province'] ?? '';
+        $tenant->rajaongkir_city_id = $validated['rajaongkir_city_id'] ?? '';
+        $tenant->shipping_cost = $validated['shipping_cost'] ?? 0;
+        $tenant->store_description = $validated['store_description'] ?? '';
 
         if ($request->hasFile('logo')) {
             if ($tenant->logo) {

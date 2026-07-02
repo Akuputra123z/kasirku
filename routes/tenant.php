@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Auth\EmailVerificationOtpController;
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CategoryController;
-use App\Http\Controllers\ChatController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PaymentMethodController;
@@ -23,6 +23,11 @@ use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\SocialiteController;
 use App\Http\Controllers\StockMovementController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\Tenant\ChatController as TenantChatController;
+use App\Http\Controllers\Tenant\MarketplaceCategoryController as TenantMarketplaceCategoryController;
+use App\Http\Controllers\Tenant\NotificationController as TenantNotificationController;
+use App\Http\Controllers\Tenant\OrderController;
+use App\Http\Controllers\Tenant\ReviewController as TenantReviewController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VoucherController;
@@ -76,10 +81,6 @@ Route::middleware(['web', 'tenant.from-user'])->group(function () {
         Route::get('reports/pdf', [ReportController::class, 'exportPdf'])->name('reports.pdf')->middleware('permission:export-reports');
         Route::get('reports/excel', [ReportController::class, 'exportExcel'])->name('reports.excel')->middleware('permission:export-reports');
 
-        Route::get('chat', [ChatController::class, 'index'])->name('chat.index');
-        Route::post('chat/send', [ChatController::class, 'send'])->name('chat.send');
-        Route::get('chat/stream', [ChatController::class, 'stream'])->name('chat.stream');
-
         Route::get('shifts', [ShiftController::class, 'index'])->name('shifts.index');
         Route::post('shifts/start', [ShiftController::class, 'start'])->name('shifts.start');
         Route::post('shifts/{shift}/close', [ShiftController::class, 'close'])->name('shifts.close');
@@ -114,6 +115,35 @@ Route::middleware(['web', 'tenant.from-user'])->group(function () {
 
         Route::get('settings/store', [StoreController::class, 'edit'])->name('settings.store');
         Route::patch('settings/store', [StoreController::class, 'update'])->name('settings.store.update');
+
+        // ─── Online Orders ───────────────────────────────────────────────
+        Route::get('online-orders', [OrderController::class, 'index'])->name('online-orders.index');
+        Route::get('online-orders/{order}', fn () => redirect()->route('online-orders.index'))->name('online-orders.show');
+        Route::patch('online-orders/{order}', [OrderController::class, 'update'])->name('online-orders.update');
+
+        // ─── Marketplace Categories (read-only) ──────────────────────────
+        Route::get('marketplace-categories', [TenantMarketplaceCategoryController::class, 'index'])->name('marketplace-categories');
+
+        // ─── Reviews ─────────────────────────────────────────────────────
+        Route::get('reviews', [TenantReviewController::class, 'index'])->name('tenant.reviews.index');
+
+        // ─── Notifications ───────────────────────────────────────────────
+        Route::get('notifications/unread', [TenantNotificationController::class, 'unread'])->name('tenant.notifications.unread');
+        Route::post('notifications/{notification}/read', [TenantNotificationController::class, 'read'])->name('tenant.notifications.read');
+        Route::post('notifications/read-all', [TenantNotificationController::class, 'readAll'])->name('tenant.notifications.read-all');
+
+        // ─── Store Chat ──────────────────────────────────────────────────
+        Route::get('conversations', [TenantChatController::class, 'index'])->name('tenant.chat.index');
+        Route::get('conversations/{conversation}', [TenantChatController::class, 'show'])->name('tenant.chat.show');
+        Route::post('conversations/{conversation}/messages', [TenantChatController::class, 'sendMessage'])->name('tenant.chat.send');
+        Route::get('conversations/{conversation}/poll', [TenantChatController::class, 'poll'])->name('tenant.chat.poll');
+
+        // ─── Billing ─────────────────────────────────────────────────────
+        Route::get('billing', [BillingController::class, 'index'])->name('billing.index');
+        Route::post('billing/subscribe', [BillingController::class, 'subscribe'])->name('billing.subscribe');
+        Route::post('billing/{subscription}/charge', [BillingController::class, 'charge'])->name('billing.charge');
+        Route::post('billing/{subscription}/cancel', [BillingController::class, 'cancel'])->name('billing.cancel');
+        Route::get('billing/success', [BillingController::class, 'success'])->name('billing.success');
     });
 });
 

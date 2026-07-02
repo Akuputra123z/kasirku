@@ -50,13 +50,35 @@ class ProductController extends Controller
     }
 
     /**
+     * Menampilkan form pembuatan produk baru.
+     */
+    public function create(Request $request): Response
+    {
+        Gate::authorize('manage-products');
+
+        return Inertia::render('products/create', [
+            'categories' => Category::select('id', 'name')->get(),
+            'brands' => Brand::select('id', 'name')->get(),
+        ]);
+    }
+
+    /**
      * Menyimpan produk baru beserta upload gambar.
      */
     public function store(StoreProductRequest $request)
     {
         Gate::authorize('manage-products');
 
+        $tenant = tenant();
+        if ($tenant && $tenant->products()->count() >= $tenant->maxProducts()) {
+            return Redirect::back()->with('error', 'Batas produk gratis ('.$tenant->maxProducts().') telah tercapai. Upgrade ke Premium untuk produk unlimited.');
+        }
+
         $validated = $request->validated();
+
+        if ($tenant && ! $tenant->canMarketplace()) {
+            $validated['visible_online'] = false;
+        }
 
         if ($request->hasFile('image')) {
             $validated['image'] = $request->file('image')->store('products/'.tenant_id(), 'public');
@@ -85,6 +107,11 @@ class ProductController extends Controller
         Gate::authorize('manage-products');
 
         $validated = $request->validated();
+
+        $tenant = tenant();
+        if ($tenant && ! $tenant->canMarketplace()) {
+            $validated['visible_online'] = false;
+        }
 
         if ($request->hasFile('image')) {
             if ($product->image) {
@@ -223,6 +250,11 @@ class ProductController extends Controller
     public function import(Request $request)
     {
         Gate::authorize('manage-products');
+
+        $tenant = tenant();
+        if ($tenant && $tenant->products()->count() >= $tenant->maxProducts()) {
+            return Redirect::back()->with('error', 'Batas produk gratis ('.$tenant->maxProducts().') telah tercapai. Upgrade ke Premium untuk produk unlimited.');
+        }
 
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls,csv|max:5120',

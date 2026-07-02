@@ -16,7 +16,13 @@ class CustomerFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'phone' => fake()->phoneNumber(),
             'address' => fake()->address(),
-            'loyalty_points' => fake()->numberBetween(0, 1000),
         ];
+    }
+
+    public function posCustomer(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'user_id' => null,
+        ]);
     }
 }

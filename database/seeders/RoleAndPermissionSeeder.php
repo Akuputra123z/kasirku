@@ -24,7 +24,6 @@ class RoleAndPermissionSeeder extends Seeder
             'manage-shifts',
             'view-reports',
             'export-reports',
-            'view-chat',
             'manage-settings',
             'manage-users',
             'manage-vouchers',
@@ -47,7 +46,6 @@ class RoleAndPermissionSeeder extends Seeder
             'view-history',
             'view-reports',
             'export-reports',
-            'view-chat',
             'manage-vouchers',
             'manage-suppliers',
             'manage-customers',
@@ -58,7 +56,6 @@ class RoleAndPermissionSeeder extends Seeder
             'view-dashboard',
             'manage-pos',
             'manage-shifts',
-            'view-chat',
         ]);
     }
 }

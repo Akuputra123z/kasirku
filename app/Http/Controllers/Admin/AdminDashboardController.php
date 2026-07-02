@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
+use App\Models\Order;
 use App\Models\Tenant;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -49,11 +50,21 @@ class AdminDashboardController extends Controller
             'created_at' => $t->created_at->diffForHumans(),
         ]);
 
+        $ppobOrders = Order::ppob()->where('payment_status', 'paid');
+        $totalPpobRevenue = (float) $ppobOrders->sum('ppob_markup');
+        $ppobThisMonth = (float) $ppobOrders->clone()
+            ->where('created_at', '>=', now()->startOfMonth())
+            ->sum('ppob_markup');
+        $ppobCount = $ppobOrders->clone()->count();
+
         return Inertia::render('admin/dashboard', [
             'stats' => [
                 'total' => $totalTenants,
                 'active' => $activeTenants,
                 'suspended' => $suspendedTenants,
+                'ppobRevenue' => $totalPpobRevenue,
+                'ppobThisMonth' => $ppobThisMonth,
+                'ppobCount' => $ppobCount,
             ],
             'monthlyGrowth' => $monthlyGrowth,
             'recentActivity' => $recentActivity,

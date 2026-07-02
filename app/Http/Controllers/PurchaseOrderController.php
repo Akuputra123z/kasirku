@@ -44,7 +44,7 @@ class PurchaseOrderController extends Controller
             'purchaseOrders' => $purchaseOrders,
             'filters' => ['search' => $search, 'status' => $status, 'sort_field' => $sortField, 'sort_dir' => $sortDir],
             'suppliers' => Supplier::select('id', 'name')->where('is_active', true)->get(),
-            'products' => Product::select('id', 'name', 'sku', 'stock')->get(),
+            'products' => Product::select('id', 'name', 'sku', 'stock', 'cost_price')->get(),
         ]);
     }
 

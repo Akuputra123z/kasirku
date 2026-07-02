@@ -1,4 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
+import { route } from 'ziggy-js';
 import {
     ArrowLeftRight,
     ArrowUpDown,
@@ -7,12 +8,16 @@ import {
     ClipboardList,
     Clock,
     CreditCard,
+    Crown,
+    Globe,
     History,
     LayoutGrid,
     MessageSquare,
     Package,
     Shield,
+    Star,
     ShoppingCart,
+    Store,
     Tags,
     TicketPercent,
     Truck,
@@ -34,10 +39,12 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import admin from '@/routes/admin';
+import billing from '@/routes/billing';
 import brands from '@/routes/brands';
 import categories from '@/routes/categories';
-import chat from '@/routes/chat';
+import { marketplaceCategories } from '@/routes';
 import customers from '@/routes/customers';
+import onlineOrders from '@/routes/online-orders';
 import paymentMethods from '@/routes/payment-methods';
 import pos from '@/routes/pos';
 import products from '@/routes/products';
@@ -52,13 +59,12 @@ import users from '@/routes/users';
 import vouchers from '@/routes/vouchers';
 import type { NavItem } from '@/types';
 
-type NavItemDef = NavItem & { permission?: string };
+type NavItemDef = NavItem & { permission?: string; subscription?: 'premium' };
 
 export function AppSidebar() {
     const { tenant, auth, centralAdmin } = usePage().props;
     const isTenant = !!tenant;
     const isSuperAdmin = auth.permissions.includes('manage-tenants');
-
     const homeUrl =
         isSuperAdmin && !isTenant ? admin.tenants().url : dashboard().url;
 
@@ -162,11 +168,40 @@ export function AppSidebar() {
             permission: 'manage-stock',
         },
         {
-            title: 'Chat AI',
-            href: chat.index().url,
+            title: 'Online Orders',
+            href: onlineOrders.index().url,
+            icon: Globe,
+            group: 'Transactions',
+            permission: 'manage-pos',
+            subscription: 'premium',
+        },
+        {
+            title: 'Marketplace',
+            href: marketplaceCategories().url,
+            icon: Store,
+            group: 'Marketplace',
+            subscription: 'premium',
+        },
+        {
+            title: 'Pesan',
+            href: route('tenant.chat.index'),
             icon: MessageSquare,
-            group: 'Tools',
-            permission: 'view-chat',
+            group: 'Marketplace',
+            subscription: 'premium',
+        },
+        {
+            title: 'Ulasan',
+            href: route('tenant.reviews.index'),
+            icon: Star,
+            group: 'Marketplace',
+            subscription: 'premium',
+        },
+        {
+            title: 'Billing',
+            href: billing.index().url,
+            icon: Crown,
+            group: 'Billing',
+            hideGroupLabel: true,
         },
         {
             title: 'Pengguna',
@@ -203,10 +238,16 @@ export function AppSidebar() {
             icon: History,
             group: 'Admin',
         },
+        {
+            title: 'Kategori Marketplace',
+            href: admin.marketplaceCategories.index().url,
+            icon: Tags,
+            group: 'Admin',
+        },
     ];
 
-    const switchItems: NavItemDef[] =
-        isTenant && (isSuperAdmin || centralAdmin)
+    const switchItems: NavItemDef[] = [
+        ...(isTenant && (isSuperAdmin || centralAdmin)
             ? [
                   {
                       title: 'Panel Admin',
@@ -215,7 +256,8 @@ export function AppSidebar() {
                       group: 'Navigasi',
                   },
               ]
-            : [];
+            : []),
+    ];
 
     const footerNavItems: NavItem[] = [];
 
@@ -232,6 +274,9 @@ export function AppSidebar() {
         }
 
         return auth.permissions.includes(item.permission);
+    }).filter((item) => {
+        if (!item.subscription) return true;
+        return tenant?.subscription_tier === item.subscription;
     });
 
     return (

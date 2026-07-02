@@ -49,6 +49,7 @@ class TenantController extends Controller
             'name' => 'required|string|max:255',
             'address' => 'nullable|string|max:500',
             'phone' => 'nullable|string|max:20',
+            'subscription_tier' => 'nullable|in:free,premium',
         ]);
 
         $tenant->update($validated);

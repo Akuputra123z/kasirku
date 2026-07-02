@@ -28,7 +28,7 @@ export function NavMain({ items = [] }: { items: NavItem[] }) {
         <>
             {Object.entries(grouped).map(([group, groupItems]) => (
                 <SidebarGroup key={group} className="px-2 py-0">
-                    <SidebarGroupLabel>{group}</SidebarGroupLabel>
+                    {!groupItems[0]?.hideGroupLabel && <SidebarGroupLabel>{group}</SidebarGroupLabel>}
                     <SidebarMenu>
                         {groupItems.map((item) => (
                             <SidebarMenuItem key={item.title}>

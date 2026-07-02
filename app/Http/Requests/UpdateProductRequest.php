@@ -42,6 +42,10 @@ class UpdateProductRequest extends FormRequest
             'extras.*.id' => ['nullable', 'exists:product_extras,id'],
             'extras.*.name' => ['required_with:extras', 'string', 'max:255'],
             'extras.*.price' => ['required_with:extras', 'numeric', 'min:0'],
+            'visible_online' => ['nullable', 'boolean'],
+            'online_price' => ['nullable', 'numeric', 'min:0'],
+            'stock_online' => ['nullable', 'integer', 'min:0'],
+            'weight' => ['nullable', 'integer', 'min:0'],
         ];
     }
 }

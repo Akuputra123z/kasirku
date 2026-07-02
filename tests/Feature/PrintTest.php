@@ -15,7 +15,7 @@ beforeEach(function () {
 
     Permission::firstOrCreate(['name' => 'manage-pos', 'guard_name' => 'web']);
 
-    $this->user = User::factory()->create(['tenant_id' => $this->tenant->id]);
+    $this->user = User::factory()->storeOwner($this->tenant)->create();
     $this->user->givePermissionTo('manage-pos');
 
     $this->transaction = Transaction::create([

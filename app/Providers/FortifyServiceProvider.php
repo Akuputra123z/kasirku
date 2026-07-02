@@ -36,10 +36,6 @@ class FortifyServiceProvider extends ServiceProvider
             {
                 public function toResponse($request)
                 {
-                    if ($request->user()?->can('manage-tenants')) {
-                        return redirect()->intended('/admin/tenants');
-                    }
-
                     return redirect()->intended(config('fortify.home'));
                 }
             };

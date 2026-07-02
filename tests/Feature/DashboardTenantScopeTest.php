@@ -14,10 +14,10 @@ beforeEach(function () {
 
     Permission::create(['name' => 'view-dashboard', 'guard_name' => 'web']);
 
-    $this->userTenant1 = User::factory()->create(['tenant_id' => $this->tenant1->id]);
+    $this->userTenant1 = User::factory()->storeOwner($this->tenant1)->create();
     $this->userTenant1->givePermissionTo('view-dashboard');
 
-    $this->userTenant2 = User::factory()->create(['tenant_id' => $this->tenant2->id]);
+    $this->userTenant2 = User::factory()->storeOwner($this->tenant2)->create();
     $this->userTenant2->givePermissionTo('view-dashboard');
 
     Transaction::create([

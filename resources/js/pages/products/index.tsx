@@ -1,7 +1,7 @@
 'use client';
 
 import { Icon } from '@iconify/react';
-import { Head, useForm, router, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, router, usePage } from '@inertiajs/react';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
     Download,
@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { CameraScanner } from '@/components/camera-scanner';
 import { ImportDialog } from '@/components/import-dialog';
 import { Badge } from '@/components/ui/badge';
+import billing from '@/routes/billing';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -85,6 +86,10 @@ interface Product {
     created_at: string;
     category?: Category;
     variants?: ProductVariant[];
+    visible_online?: boolean;
+    online_price?: number | null;
+    stock_online?: number | null;
+    weight?: number;
 }
 
 interface Paginator<T> {
@@ -102,6 +107,8 @@ interface Props {
 }
 
 export default function Index({ products, categories, filters }: Props) {
+    const { tenant } = usePage().props;
+    const isPremium = (tenant as { subscription_tier?: string } | null)?.subscription_tier === 'premium';
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [isCameraOpen, setIsCameraOpen] = useState(false);
@@ -156,6 +163,10 @@ export default function Index({ products, categories, filters }: Props) {
             status: 'active',
             image: null as File | null,
             variants: [] as ProductVariant[],
+            visible_online: false,
+            online_price: '',
+            stock_online: '',
+            weight: '',
             _method: 'POST' as 'POST' | 'PUT',
         });
 
@@ -229,17 +240,6 @@ export default function Index({ products, categories, filters }: Props) {
     const errorEntries = Object.entries(errors);
     const hasErrors = errorEntries.length > 0;
 
-    const openCreateDialog = () => {
-        setEditingProduct(null);
-        setImagePreview(null);
-        reset();
-        clearErrors();
-        setCategorySearch('');
-        setData('_method', 'POST');
-        autoCameraOpenedRef.current = false;
-        setIsDialogOpen(true);
-    };
-
     const openEditDialog = (product: Product) => {
         setEditingProduct(product);
         setImagePreview(product.image_url ?? null);
@@ -254,6 +254,10 @@ export default function Index({ products, categories, filters }: Props) {
             status: product.status,
             image: null,
             variants: product.variants || [],
+            visible_online: product.visible_online ?? false,
+            online_price: product.online_price?.toString() || '',
+            stock_online: product.stock_online?.toString() || '',
+            weight: product.weight?.toString() || '',
             _method: 'PUT',
         });
         clearErrors();
@@ -275,21 +279,15 @@ export default function Index({ products, categories, filters }: Props) {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        const url = editingProduct
-            ? route('products.update', editingProduct.id)
-            : route('products.store');
+        const url = route('products.update', editingProduct.id);
 
         post(url, {
             forceFormData: true,
-            onSuccess: () => {
-                setIsDialogOpen(false);
-                reset();
-                toast.success(
-                    editingProduct
-                        ? 'Product updated successfully'
-                        : 'Product created successfully',
-                );
-            },
+                onSuccess: () => {
+                    setIsDialogOpen(false);
+                    reset();
+                    toast.success('Product updated successfully');
+                },
             onError: (err) => {
                 const firstError = Object.values(err)[0];
 
@@ -689,7 +687,7 @@ export default function Index({ products, categories, filters }: Props) {
                         Import <Download className="size-3.5" />
                     </Button>
                     <Button
-                        onClick={openCreateDialog}
+                        onClick={() => router.get(route('products.create'))}
                         size="sm"
                         className="flex h-9 items-center gap-2 rounded-lg bg-black px-3 font-medium text-white shadow-lg hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
                     >
@@ -1334,14 +1332,96 @@ export default function Index({ products, categories, filters }: Props) {
                                 <div className="space-y-4 border-t border-neutral-100 pt-5 md:space-y-6 md:pt-6 dark:border-neutral-900">
                                     <div className="mb-2 flex items-center gap-2 md:mb-4 md:gap-3">
                                         <div className="flex size-7 items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 md:size-8 md:rounded-xl dark:bg-neutral-900">
-                                            <Icon
-                                                icon="solar:layers-bold-duotone"
-                                                className="size-4 md:size-5"
-                                            />
+                                            <Icon icon="solar:cart-bold-duotone" className="size-4 md:size-5" />
                                         </div>
-                                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 uppercase md:text-[15px] dark:text-white">
-                                            Konfigurasi Varian
-                                        </h3>
+                                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 uppercase md:text-[15px] dark:text-white">Marketplace Online</h3>
+                                    </div>
+                                    {isPremium ? (
+                                        <>
+                                            <div className="flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-50 p-4 md:p-5 dark:border-neutral-800 dark:bg-neutral-900/50">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`flex size-10 items-center justify-center rounded-xl ${data.visible_online ? 'bg-emerald-100 text-emerald-600' : 'bg-neutral-200 text-neutral-400'} transition-colors`}>
+                                                        <Icon icon="solar:global-bold-duotone" className="size-5" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[13px] font-bold md:text-[14px]">Jual Online</p>
+                                                        <p className="text-[11px] text-neutral-500">Tampilkan produk ini di marketplace</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setData('visible_online', !data.visible_online)}
+                                                    className={`relative h-7 w-12 rounded-full transition-all ${data.visible_online ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-700'}`}
+                                                >
+                                                    <span className={`absolute top-0.5 left-0.5 size-6 rounded-full bg-white shadow-md transition-transform ${data.visible_online ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </button>
+                                            </div>
+                                            {data.visible_online && (
+                                                <div className="grid grid-cols-1 gap-4 md:gap-6 md:grid-cols-3">
+                                                    <div className="grid gap-1.5 md:gap-2">
+                                                        <Label className="ml-1 text-[11px] font-bold tracking-widest text-neutral-500 uppercase md:text-[12px] md:ml-1">Harga Online (Rp)</Label>
+                                                        <CurrencyInput
+                                                            value={data.online_price}
+                                                            onChange={(v) => setData('online_price', v)}
+                                                            className="h-10 rounded-xl border-neutral-200 text-[13px] font-bold md:h-12 md:rounded-2xl md:text-[15px] dark:border-neutral-800"
+                                                            placeholder="Kosongkan untuk pakai harga jual"
+                                                        />
+                                                    </div>
+                                                    <div className="grid gap-1.5 md:gap-2">
+                                                        <Label className="ml-1 text-[11px] font-bold tracking-widest text-neutral-500 uppercase md:text-[12px] md:ml-1">Stok Online</Label>
+                                                        <div className="relative">
+                                                            <div className="absolute top-1/2 left-3 -translate-y-1/2 text-neutral-400 md:left-4">
+                                                                <Icon icon="solar:box-bold-duotone" className="size-3.5 md:size-4" />
+                                                            </div>
+                                                            <Input
+                                                                type="number"
+                                                                value={data.stock_online}
+                                                                onChange={(e) => setData('stock_online', e.target.value)}
+                                                                className="h-10 rounded-xl border-neutral-200 pl-9 text-[13px] font-bold md:h-12 md:rounded-2xl md:pl-11 md:text-[15px] dark:border-neutral-800"
+                                                                placeholder="Kosongkan untuk pakai stok reguler"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid gap-1.5 md:gap-2">
+                                                        <Label className="ml-1 text-[11px] font-bold tracking-widest text-neutral-500 uppercase md:text-[12px] md:ml-1">Berat (gram)</Label>
+                                                        <div className="relative">
+                                                            <div className="absolute top-1/2 left-3 -translate-y-1/2 text-neutral-400 md:left-4">
+                                                                <Icon icon="solar:scales-bold-duotone" className="size-3.5 md:size-4" />
+                                                            </div>
+                                                            <Input
+                                                                type="number"
+                                                                value={data.weight}
+                                                                onChange={(e) => setData('weight', e.target.value)}
+                                                                className="h-10 rounded-xl border-neutral-200 pl-9 text-[13px] font-bold md:h-12 md:rounded-2xl md:pl-11 md:text-[15px] dark:border-neutral-800"
+                                                                placeholder="0"
+                                                            />
+                                                        </div>
+                                                        <p className="text-[11px] font-medium text-neutral-400">Digunakan untuk kalkulasi ongkos kirim</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div className="flex items-center justify-between rounded-xl border border-neutral-200 bg-neutral-100 p-4 md:p-5 dark:border-neutral-800 dark:bg-neutral-900/30">
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex size-10 items-center justify-center rounded-xl bg-neutral-200 text-neutral-400 dark:bg-neutral-800">
+                                                    <Icon icon="solar:lock-bold-duotone" className="size-5" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-[13px] font-bold text-neutral-400 md:text-[14px]">Jual Online</p>
+                                                    <p className="text-[11px] text-neutral-400">Fitur Premium — <Link href={billing.index().url} className="text-emerald-600 underline">Upgrade sekarang</Link></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="space-y-4 border-t border-neutral-100 pt-5 md:space-y-6 md:pt-6 dark:border-neutral-900">
+                                    <div className="mb-2 flex items-center gap-2 md:mb-4 md:gap-3">
+                                        <div className="flex size-7 items-center justify-center rounded-lg bg-neutral-100 text-neutral-500 md:size-8 md:rounded-xl dark:bg-neutral-900">
+                                            <Icon icon="solar:layers-bold-duotone" className="size-4 md:size-5" />
+                                        </div>
+                                        <h3 className="text-[13px] font-bold tracking-tight text-neutral-900 uppercase md:text-[15px] dark:text-white">Konfigurasi Varian</h3>
                                     </div>
                                     <VariantManager
                                         variants={data.variants}

@@ -1,21 +1,22 @@
-import { Head } from '@inertiajs/react';
-import { User, Mail, Lock, Check, X, Chrome } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import { ArrowLeft, Check, Chrome, Store, User, X } from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
-import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Spinner } from '@/components/ui/spinner';
-import { login } from '@/routes';
 
 type Props = {
     googleUser?: { name: string; email: string; avatar?: string } | null;
 };
 
-export default function Register({ googleUser }: Props) {
+type Step = 'select' | 'store';
+
+export default function Register({ googleUser, redirect }: Props & { redirect?: string }) {
+    const [step, setStep] = useState<Step>(googleUser ? 'store' : 'select');
     const [form, setForm] = useState({
         name: googleUser?.name ?? '',
         email: googleUser?.email ?? '',
@@ -28,65 +29,35 @@ export default function Register({ googleUser }: Props) {
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setForm((prev) => ({ ...prev, [name]: value }));
+        setErrors((prev) => {
+            const next = { ...prev };
+            delete next[name];
+            return next;
+        });
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setProcessing(true);
         setErrors({});
 
-        try {
-            const csrfToken =
-                typeof document !== 'undefined'
-                    ? document.querySelector<HTMLMetaElement>(
-                          'meta[name=csrf-token]',
-                      )?.content || ''
-                    : '';
-            const res = await fetch('/register/store', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    Accept: 'application/json',
-                },
-                body: JSON.stringify({
-                    ...form,
-                    google_registered: !!googleUser,
-                }),
-            });
-
-            let data;
-
-            try {
-                data = await res.json();
-            } catch {
-                setErrors({ form: 'Terjadi kesalahan. Silakan coba lagi.' });
-
-                return;
-            }
-
-            if (data.status === 'success') {
-                window.location.href = data.redirect;
-
-                return;
-            }
-
-            const mapped: Record<string, string> = {};
-
-            for (const [key, msgs] of Object.entries(data.errors ?? {})) {
-                mapped[key] = Array.isArray(msgs) ? msgs[0] : String(msgs);
-            }
-
-            setErrors(
-                Object.keys(mapped).length
-                    ? mapped
-                    : { form: 'Terjadi kesalahan. Silakan coba lagi.' },
-            );
-        } catch {
-            setErrors({ form: 'Terjadi kesalahan. Silakan coba lagi.' });
-        } finally {
-            setProcessing(false);
-        }
+        router.post('/register/store', {
+            ...form,
+            google_registered: !!googleUser,
+        }, {
+            onError: (errs) => {
+                const mapped: Record<string, string> = {};
+                for (const [key, msg] of Object.entries(errs)) {
+                    mapped[key] = String(msg);
+                }
+                setErrors(
+                    Object.keys(mapped).length
+                        ? mapped
+                        : { form: 'Terjadi kesalahan. Silakan coba lagi.' },
+                );
+            },
+            onFinish: () => setProcessing(false),
+        });
     };
 
     const passwordsMatch =
@@ -95,11 +66,93 @@ export default function Register({ googleUser }: Props) {
         form.password === form.password_confirmation;
     const passwordMinLen = form.password.length >= 8;
 
+    if (step === 'select') {
+        return (
+            <>
+                <Head title="Pilih Peran" />
+
+                <div className="flex flex-col gap-6">
+                    <div className="text-center">
+                        <h2 className="text-xl font-bold text-[#191c1d]">
+                            Daftar sebagai siapa?
+                        </h2>
+                        <p className="mt-1 text-sm text-[#464554]">
+                            Pilih peran Anda untuk melanjutkan
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col gap-4">
+                        <button
+                            type="button"
+                            onClick={() => setStep('store')}
+                            className="flex items-center gap-4 rounded-xl border-2 border-[#d7d4e7] bg-white p-5 text-left transition-all hover:border-[#4648d4] hover:shadow-md active:scale-[0.98]"
+                        >
+                            <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-[#e1e0ff] text-[#4648d4]">
+                                <Store className="size-7" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-[15px] font-bold text-[#191c1d]">
+                                    Pemilik Toko
+                                </p>
+                                <p className="text-[13px] text-[#464554]">
+                                    Buka toko online, kelola POS, stok, dan laporan bisnis
+                                </p>
+                            </div>
+                            <User className="size-5 text-[#464554]" />
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => router.visit(`/customer/register${redirect ? `?redirect=${encodeURIComponent(redirect)}` : ''}`)}
+                            className="flex items-center gap-4 rounded-xl border-2 border-[#d7d4e7] bg-white p-5 text-left transition-all hover:border-[#4648d4] hover:shadow-md active:scale-[0.98]"
+                        >
+                            <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-[#ffddb8] text-[#684000]">
+                                <User className="size-7" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-[15px] font-bold text-[#191c1d]">
+                                    Pembeli
+                                </p>
+                                <p className="text-[13px] text-[#464554]">
+                                    Belanja produk UMKM dari berbagai toko
+                                </p>
+                            </div>
+                            <User className="size-5 text-[#464554]" />
+                        </button>
+                    </div>
+
+                    <p className="text-center text-sm text-[#464554]">
+                        Sudah punya akun?{' '}
+                        <Link
+                            href="/login"
+                            className="font-bold text-[#4648d4] hover:underline"
+                        >
+                            Masuk
+                        </Link>
+                    </p>
+                </div>
+            </>
+        );
+    }
+
     return (
         <>
             <Head title="Buat Akun Baru" />
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+                {/* Back to selection */}
+                <button
+                    type="button"
+                    onClick={() => {
+                        setStep('select');
+                        setErrors({});
+                    }}
+                    className="flex items-center gap-1 text-[13px] font-medium text-[#464554] transition-colors hover:text-[#4648d4]"
+                >
+                    <ArrowLeft className="size-4" />
+                    Ganti peran
+                </button>
+
                 {/* Google Register */}
                 {!googleUser && (
                     <>
@@ -259,8 +312,8 @@ export default function Register({ googleUser }: Props) {
                     className="mt-2 w-full gap-2"
                     disabled={processing}
                 >
-                    {processing ? <Spinner /> : <User className="size-4" />}
-                    {processing ? 'Memproses...' : 'Daftar'}
+                    {processing ? <Spinner /> : <Store className="size-4" />}
+                    {processing ? 'Memproses...' : 'Daftar sebagai Pemilik Toko'}
                 </Button>
 
                 {errors.form && (
@@ -270,7 +323,13 @@ export default function Register({ googleUser }: Props) {
                 )}
 
                 <div className="text-center text-sm text-muted-foreground">
-                    Sudah punya akun? <TextLink href={login()}>Login</TextLink>
+                    Sudah punya akun?{' '}
+                    <Link
+                        href="/login"
+                        className="font-bold text-[#4648d4] hover:underline"
+                    >
+                        Masuk
+                    </Link>
                 </div>
             </form>
         </>
@@ -279,5 +338,5 @@ export default function Register({ googleUser }: Props) {
 
 Register.layout = {
     title: 'Buat Akun Baru',
-    description: 'Daftar untuk memulai',
+    description: 'Daftar sebagai pemilik toko atau pembeli marketplace.',
 };

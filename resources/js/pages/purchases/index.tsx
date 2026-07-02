@@ -41,6 +41,7 @@ import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
     SelectTrigger,
     SelectValue,
@@ -70,6 +71,7 @@ interface Product {
     name: string;
     sku: string | null;
     stock: number;
+    cost_price: number;
 }
 
 interface PurchaseOrderDetail {
@@ -190,6 +192,7 @@ export default function Index({
     );
     const [sortDir, setSortDir] = useState(filters?.sort_dir ?? 'desc');
     const [productSearch, setProductSearch] = useState('');
+    const [supplierSearch, setSupplierSearch] = useState('');
     const [rawPrices, setRawPrices] = useState<Record<number, string>>({});
 
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -294,6 +297,7 @@ export default function Index({
         reset();
         clearErrors();
         setProductSearch('');
+        setSupplierSearch('');
         setRawPrices({});
         setIsCreateOpen(true);
     };
@@ -362,6 +366,18 @@ export default function Index({
                   )
                 : products,
         [products, productSearch],
+    );
+
+    const filteredSuppliers = useMemo(
+        () =>
+            supplierSearch
+                ? suppliers.filter((s) =>
+                      s.name
+                          .toLowerCase()
+                          .includes(supplierSearch.toLowerCase()),
+                  )
+                : suppliers,
+        [suppliers, supplierSearch],
     );
 
     const SortIcon = ({ field }: { field: string }) => {
@@ -782,20 +798,69 @@ export default function Index({
                                         onValueChange={(v) =>
                                             setData('supplier_id', v)
                                         }
+                                        onOpenChange={(open) => {
+                                            if (open) {
+                                                setSupplierSearch('');
+                                            }
+                                        }}
                                     >
-                                        <SelectTrigger className="text-[13px]">
+                                        <SelectTrigger className="h-9 w-full text-[13px]">
                                             <SelectValue placeholder="Pilih supplier" />
                                         </SelectTrigger>
-                                        <SelectContent>
-                                            {suppliers.map((s) => (
-                                                <SelectItem
-                                                    key={s.id}
-                                                    value={String(s.id)}
-                                                    className="text-[13px]"
-                                                >
-                                                    {s.name}
-                                                </SelectItem>
-                                            ))}
+                                        <SelectContent
+                                            className="max-h-72 min-w-[200px] sm:min-w-[280px] max-w-[calc(100vw-2rem)] overscroll-contain p-0 [&>[data-position=popper]]:h-auto"
+                                            align="start"
+                                            position="popper"
+                                        >
+                                            <div
+                                                className="sticky top-0 z-10 border-b bg-popover p-2"
+                                                onPointerDown={(e) =>
+                                                    e.stopPropagation()
+                                                }
+                                            >
+                                                <div className="relative">
+                                                    <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                                                    <Input
+                                                        placeholder="Cari supplier..."
+                                                        value={supplierSearch}
+                                                        onChange={(e) =>
+                                                            setSupplierSearch(
+                                                                e.target.value,
+                                                            )
+                                                        }
+                                                        className="h-8 pl-8 text-[13px]"
+                                                        autoFocus
+                                                        onKeyDown={(e) =>
+                                                            e.stopPropagation()
+                                                        }
+                                                    />
+                                                </div>
+                                            </div>
+                                            <SelectGroup className="p-1">
+                                                {filteredSuppliers.length > 0 ? (
+                                                    filteredSuppliers.map(
+                                                        (s) => (
+                                                            <SelectItem
+                                                                key={s.id}
+                                                                value={String(
+                                                                    s.id,
+                                                                )}
+                                                                className="text-[13px]"
+                                                            >
+                                                                {s.name}
+                                                            </SelectItem>
+                                                        ),
+                                                    )
+                                                ) : (
+                                                    <div className="flex flex-col items-center gap-1 px-2 py-6 text-center text-[13px] text-muted-foreground">
+                                                        <Search className="size-5 opacity-30" />
+                                                        <span>
+                                                            Supplier tidak
+                                                            ditemukan
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </SelectGroup>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -844,17 +909,6 @@ export default function Index({
                                         {errors.items}
                                     </p>
                                 )}
-                                <div className="relative">
-                                    <Search className="absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                                    <Input
-                                        placeholder="Cari produk..."
-                                        value={productSearch}
-                                        onChange={(e) =>
-                                            setProductSearch(e.target.value)
-                                        }
-                                        className="h-8 pl-7 text-[12px]"
-                                    />
-                                </div>
                                 {data.items.map((item, idx) => (
                                     <div
                                         key={idx}
@@ -866,61 +920,95 @@ export default function Index({
                                             </Label>
                                             <Select
                                                 value={String(item.product_id)}
-                                                onValueChange={(v) =>
-                                                    updateItem(
-                                                        idx,
-                                                        'product_id',
-                                                        v,
-                                                    )
-                                                }
+                                                onValueChange={(v) => {
+                                                    const selected = filteredProducts.find(
+                                                        (p) => String(p.id) === v,
+                                                    );
+
+                                                    const items = [...data.items];
+                                                    items[idx] = {
+                                                        ...items[idx],
+                                                        product_id: v,
+                                                        ...(selected?.cost_price
+                                                            ? {
+                                                                  unit_cost: selected.cost_price,
+                                                              }
+                                                            : {}),
+                                                    };
+                                                    setData('items', items);
+                                                }}
+                                                onOpenChange={(open) => {
+                                                    if (open) {
+                                                        setProductSearch('');
+                                                    }
+                                                }}
                                             >
                                                 <SelectTrigger className="h-8 w-full text-[12px]">
                                                     <SelectValue placeholder="Pilih produk" />
                                                 </SelectTrigger>
-                                                <SelectContent className="max-h-64 w-[var(--radix-select-trigger-width)] min-w-[200px]">
-                                                    {filteredProducts.length >
-                                                    0 ? (
-                                                        filteredProducts.map(
-                                                            (p) => (
-                                                                <SelectItem
-                                                                    key={p.id}
-                                                                    value={String(
-                                                                        p.id,
-                                                                    )}
-                                                                    className="text-[12px]"
-                                                                >
-                                                                    <span className="inline-flex items-center gap-2">
-                                                                        {p.name}
-                                                                        {p.sku && (
-                                                                            <span className="text-muted-foreground">
-                                                                                (
-                                                                                {
-                                                                                    p.sku
-                                                                                }
-
-                                                                                )
-                                                                            </span>
-                                                                        )}
-                                                                        <span
-                                                                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${stockLevel(p.stock).class}`}
-                                                                        >
-                                                                            {
-                                                                                stockLevel(
-                                                                                    p.stock,
-                                                                                )
-                                                                                    .label
-                                                                            }
-                                                                        </span>
-                                                                    </span>
-                                                                </SelectItem>
-                                                            ),
-                                                        )
-                                                    ) : (
-                                                        <div className="px-2 py-4 text-center text-[12px] text-muted-foreground">
-                                                            Produk tidak
-                                                            ditemukan
+                                                <SelectContent
+                                                    className="max-h-80 min-w-[200px] sm:min-w-[300px] max-w-[calc(100vw-2rem)] overscroll-contain p-0 [&>[data-position=popper]]:h-auto"
+                                                    align="start"
+                                                    position="popper"
+                                                >
+                                                    <div
+                                                        className="sticky top-0 z-10 border-b bg-popover p-2"
+                                                        onPointerDown={(e) =>
+                                                            e.stopPropagation()
+                                                        }
+                                                    >
+                                                        <div className="relative">
+                                                            <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                                                            <Input
+                                                                placeholder="Cari produk..."
+                                                                value={productSearch}
+                                                                onChange={(e) =>
+                                                                    setProductSearch(
+                                                                    e.target.value,
+                                                                    )
+                                                                }
+                                                                className="h-8 pl-8 text-[12px]"
+                                                                autoFocus
+                                                                onKeyDown={(e) =>
+                                                                    e.stopPropagation()
+                                                                }
+                                                            />
                                                         </div>
-                                                    )}
+                                                    </div>
+                                                    <SelectGroup className="p-1">
+                                                        {filteredProducts.length > 0 ? (
+                                                            filteredProducts.map(
+                                                                (p) => (
+                                                                    <SelectItem
+                                                                        key={p.id}
+                                                                        value={String(p.id)}
+                                                                        className="text-[12px]"
+                                                                    >
+                                                                        <span className="inline-flex items-center gap-2 max-w-full">
+                                                                            <span className="truncate max-w-[200px]">
+                                                                                {p.name}
+                                                                            </span>
+                                                                            {p.sku && (
+                                                                                <span className="shrink-0 text-muted-foreground">
+                                                                                    ({p.sku})
+                                                                                </span>
+                                                                            )}
+                                                                            <span
+                                                                                className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${stockLevel(p.stock).class}`}
+                                                                            >
+                                                                                {stockLevel(p.stock).label ?? ''}
+                                                                            </span>
+                                                                        </span>
+                                                                    </SelectItem>
+                                                                ),
+                                                            )
+                                                        ) : (
+                                                            <div className="flex flex-col items-center gap-1 px-2 py-8 text-center text-[12px] text-muted-foreground">
+                                                                <Search className="size-5 opacity-30" />
+                                                                <span>Produk tidak ditemukan</span>
+                                                            </div>
+                                                        )}
+                                                    </SelectGroup>
                                                 </SelectContent>
                                             </Select>
                                             {errors[
@@ -935,112 +1023,114 @@ export default function Index({
                                                 </p>
                                             )}
                                         </div>
-                                        <div className="flex items-end gap-2">
-                                            <div className="flex-1 space-y-1">
-                                                <Label className="text-[11px] text-muted-foreground">
-                                                    Qty
-                                                </Label>
-                                                <Input
-                                                    type="number"
-                                                    min="1"
-                                                    value={item.quantity}
-                                                    onChange={(e) =>
-                                                        updateItem(
-                                                            idx,
-                                                            'quantity',
-                                                            parseInt(
-                                                                e.target.value,
-                                                            ) || 1,
-                                                        )
-                                                    }
-                                                    className="h-8 w-full text-[12px]"
-                                                />
-                                                {errors[
-                                                    `items.${idx}.quantity`
-                                                ] && (
-                                                    <p className="text-[11px] text-red-500">
-                                                        {
-                                                            errors[
-                                                                `items.${idx}.quantity`
-                                                            ]
+                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                                            <div className="flex flex-1 gap-2">
+                                                <div className="w-full sm:w-20 space-y-1">
+                                                    <Label className="text-[11px] text-muted-foreground">
+                                                        Qty
+                                                    </Label>
+                                                    <Input
+                                                        type="number"
+                                                        min="1"
+                                                        value={item.quantity}
+                                                        onChange={(e) =>
+                                                            updateItem(
+                                                                idx,
+                                                                'quantity',
+                                                                parseInt(
+                                                                    e.target.value,
+                                                                ) || 1,
+                                                            )
                                                         }
-                                                    </p>
-                                                )}
-                                            </div>
-                                            <div className="flex-[2] space-y-1">
-                                                <Label className="text-[11px] text-muted-foreground">
-                                                    Harga
-                                                </Label>
-                                                <Input
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    value={
-                                                        idx in rawPrices
-                                                            ? rawPrices[idx]
-                                                            : String(
-                                                                  item.unit_cost,
-                                                              )
-                                                    }
-                                                    onChange={(e) => {
-                                                        setRawPrices({
-                                                            ...rawPrices,
-                                                            [idx]: e.target
-                                                                .value,
-                                                        });
-                                                    }}
-                                                    onBlur={() => {
-                                                        const raw =
-                                                            rawPrices[idx];
-
-                                                        if (raw === undefined) {
-                                                            return;
+                                                        className="h-8 w-full text-[12px]"
+                                                    />
+                                                    {errors[
+                                                        `items.${idx}.quantity`
+                                                    ] && (
+                                                        <p className="text-[11px] text-red-500">
+                                                            {
+                                                                errors[
+                                                                    `items.${idx}.quantity`
+                                                                ]
+                                                            }
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 space-y-1">
+                                                    <Label className="text-[11px] text-muted-foreground">
+                                                        Harga
+                                                    </Label>
+                                                    <Input
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        value={
+                                                            idx in rawPrices
+                                                                ? rawPrices[idx]
+                                                                : String(
+                                                                      item.unit_cost,
+                                                                  )
                                                         }
+                                                        onChange={(e) => {
+                                                            setRawPrices({
+                                                                ...rawPrices,
+                                                                [idx]: e.target
+                                                                    .value,
+                                                            });
+                                                        }}
+                                                        onBlur={() => {
+                                                            const raw =
+                                                                rawPrices[idx];
 
-                                                        const cleaned =
-                                                            raw.replace(
-                                                                /[^0-9.]/g,
-                                                                '',
+                                                            if (raw === undefined) {
+                                                                return;
+                                                            }
+
+                                                            const cleaned =
+                                                                raw.replace(
+                                                                    /[^0-9.]/g,
+                                                                    '',
+                                                                );
+                                                            const parsed =
+                                                                parseFloat(cleaned);
+                                                            const val = isNaN(
+                                                                parsed,
+                                                            )
+                                                                ? 0
+                                                                : parsed;
+                                                            updateItem(
+                                                                idx,
+                                                                'unit_cost',
+                                                                val,
                                                             );
-                                                        const parsed =
-                                                            parseFloat(cleaned);
-                                                        const val = isNaN(
-                                                            parsed,
-                                                        )
-                                                            ? 0
-                                                            : parsed;
-                                                        updateItem(
-                                                            idx,
-                                                            'unit_cost',
-                                                            val,
-                                                        );
-                                                        setRawPrices((prev) => {
-                                                            const next = {
-                                                                ...prev,
-                                                            };
-                                                            delete next[idx];
+                                                            setRawPrices((prev) => {
+                                                                const next = {
+                                                                    ...prev,
+                                                                };
+                                                                delete next[idx];
 
-                                                            return next;
-                                                        });
-                                                    }}
-                                                    className="h-8 w-full text-[12px]"
-                                                />
-                                                {errors[
-                                                    `items.${idx}.unit_cost`
-                                                ] && (
-                                                    <p className="text-[11px] text-red-500">
-                                                        {
-                                                            errors[
-                                                                `items.${idx}.unit_cost`
-                                                            ]
-                                                        }
-                                                    </p>
-                                                )}
+                                                                return next;
+                                                            });
+                                                        }}
+                                                        className="h-8 w-full text-[12px]"
+                                                    />
+                                                    {errors[
+                                                        `items.${idx}.unit_cost`
+                                                    ] && (
+                                                        <p className="text-[11px] text-red-500">
+                                                            {
+                                                                errors[
+                                                                    `items.${idx}.unit_cost`
+                                                                ]
+                                                            }
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
                                             <Button
                                                 type="button"
                                                 variant="ghost"
                                                 size="icon"
-                                                className="size-8 shrink-0 text-red-500"
+                                                className="size-8 shrink-0 self-end sm:self-auto text-red-500"
                                                 onClick={() => removeItem(idx)}
                                                 disabled={
                                                     data.items.length <= 1

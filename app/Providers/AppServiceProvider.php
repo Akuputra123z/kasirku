@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Conversation;
+use App\Policies\ConversationPolicy;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +27,8 @@ class AppServiceProvider extends ServiceProvider
 
     protected function configureDefaults(): void
     {
+        Gate::policy(Conversation::class, ConversationPolicy::class);
+
         Date::use(CarbonImmutable::class);
 
         DB::prohibitDestructiveCommands(

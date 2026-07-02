@@ -51,6 +51,7 @@ type TenantRow = {
     address: string | null;
     phone: string | null;
     subscription_status: string;
+    subscription_tier: string;
     created_at: string;
     domains: { domain: string }[];
 };
@@ -71,6 +72,7 @@ export default function AdminTenants({
         name: '',
         address: '',
         phone: '',
+        subscription_tier: 'free',
     });
 
     const openEdit = (tenant: TenantRow) => {
@@ -79,6 +81,7 @@ export default function AdminTenants({
             name: tenant.name,
             address: tenant.address ?? '',
             phone: tenant.phone ?? '',
+            subscription_tier: tenant.subscription_tier,
         });
     };
 
@@ -311,6 +314,7 @@ export default function AdminTenants({
                                     </TableHead>
                                     <TableHead>Store Name</TableHead>
                                     <TableHead>Slug</TableHead>
+                                    <TableHead>Tier</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Registered</TableHead>
                                     <TableHead className="w-56" />
@@ -334,6 +338,11 @@ export default function AdminTenants({
                                         </TableCell>
                                         <TableCell className="text-muted-foreground">
                                             {tenant.slug}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant={tenant.subscription_tier === 'premium' ? 'default' : 'secondary'}>
+                                                {tenant.subscription_tier === 'premium' ? 'Premium' : 'Gratis'}
+                                            </Badge>
                                         </TableCell>
                                         <TableCell>
                                             <Badge
@@ -474,6 +483,23 @@ export default function AdminTenants({
                                     setData('phone', e.target.value)
                                 }
                             />
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="edit-tier">Tier Langganan</Label>
+                            <Select
+                                value={data.subscription_tier}
+                                onValueChange={(v) =>
+                                    setData('subscription_tier', v)
+                                }
+                            >
+                                <SelectTrigger id="edit-tier">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="free">Gratis</SelectItem>
+                                    <SelectItem value="premium">Premium</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
                     <DialogFooter>

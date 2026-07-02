@@ -2,10 +2,12 @@
 
 use App\Http\Middleware\CheckPermission;
 use App\Http\Middleware\EnsureCentralContext;
+use App\Http\Middleware\EnsureMarketplaceContext;
 use App\Http\Middleware\EnsureTenantActive;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\IdentifyTenant;
+use App\Http\Middleware\RemovePoweredByHeader;
 use App\Http\Middleware\SetTenantFromUser;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -17,10 +19,18 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: [__DIR__.'/../routes/web.php', __DIR__.'/../routes/tenant.php'],
         commands: __DIR__.'/../routes/console.php',
+        channels: __DIR__.'/../routes/channels.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state', 'tenant']);
+
+        $middleware->validateCsrfTokens(except: [
+            'webhook/midtrans',
+            'rajaongkir/*',
+        ]);
+
+        $middleware->append(RemovePoweredByHeader::class);
 
         $middleware->web(append: [
             IdentifyTenant::class,
@@ -34,6 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => RoleMiddleware::class,
             'tenant.from-user' => SetTenantFromUser::class,
             'central.context' => EnsureCentralContext::class,
+            'marketplace.context' => EnsureMarketplaceContext::class,
             'tenant.active' => EnsureTenantActive::class,
         ]);
     })

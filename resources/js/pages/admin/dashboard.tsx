@@ -1,7 +1,7 @@
 'use client';
 
 import { Head } from '@inertiajs/react';
-import { Activity, ArrowUpRight, Building2, Store, Users } from 'lucide-react';
+import { Activity, ArrowUpRight, Building2, DollarSign, Store, TrendingUp, Users } from 'lucide-react';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -13,11 +13,16 @@ import {
 } from '@/components/ui/card';
 import { home } from '@/routes';
 
+function formatPrice(amount: number): string {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
+}
+
 type StatCard = {
     title: string;
     value: number;
     icon: React.ElementType;
     variant: 'default' | 'success' | 'warning' | 'destructive';
+    format?: 'number' | 'currency';
 };
 
 type MonthlyGrowthPoint = {
@@ -47,7 +52,7 @@ export default function AdminDashboard({
     recentActivity,
     latestTenants,
 }: {
-    stats: { total: number; active: number; suspended: number };
+    stats: { total: number; active: number; suspended: number; ppobRevenue: number; ppobThisMonth: number; ppobCount: number };
     monthlyGrowth: MonthlyGrowthPoint[];
     recentActivity: ActivityItem[];
     latestTenants: TenantItem[];
@@ -70,6 +75,26 @@ export default function AdminDashboard({
             value: stats.suspended,
             icon: Users,
             variant: 'destructive',
+        },
+        {
+            title: 'Pendapatan PPOB',
+            value: stats.ppobRevenue,
+            icon: DollarSign,
+            variant: 'default',
+            format: 'currency',
+        },
+        {
+            title: 'PPOB Bulan Ini',
+            value: stats.ppobThisMonth,
+            icon: TrendingUp,
+            variant: 'success',
+            format: 'currency',
+        },
+        {
+            title: 'Transaksi PPOB',
+            value: stats.ppobCount,
+            icon: Activity,
+            variant: 'warning',
         },
     ];
 
@@ -119,7 +144,7 @@ export default function AdminDashboard({
                                 </CardHeader>
                                 <CardContent>
                                     <div className="text-3xl font-bold">
-                                        {card.value}
+                                        {card.format === 'currency' ? formatPrice(card.value) : card.value}
                                     </div>
                                 </CardContent>
                             </Card>

@@ -30,7 +30,7 @@ test('store registration creates tenant and returns redirect', function () {
     ]);
 
     expect($response->json('status'))->toBe('success');
-    expect(Tenant::where('name', 'Toko Test User')->exists())->toBeTrue();
+    expect(Tenant::where('name', 'Test User')->exists())->toBeTrue();
 });
 
 test('store registration rejects duplicate email', function () {

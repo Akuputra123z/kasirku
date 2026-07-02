@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Customer;
 use App\Models\PointTransaction;
+use App\Models\StoreCustomer;
 use App\Models\Tenant;
 use App\Models\Transaction;
 
@@ -38,7 +38,7 @@ class PointService
         return $points * $config['point_value'];
     }
 
-    public static function earnPoints(Customer $customer, Transaction $transaction, int $totalAmount): void
+    public static function earnPoints(int $customerId, Transaction $transaction, int $totalAmount): void
     {
         $points = self::calculateEarnedPoints($totalAmount);
 
@@ -46,10 +46,17 @@ class PointService
             return;
         }
 
-        $customer->increment('loyalty_points', $points);
+        $storeCustomer = StoreCustomer::where('customer_id', $customerId)
+            ->where('tenant_id', tenant_id())
+            ->first();
+
+        if ($storeCustomer) {
+            $storeCustomer->increment('loyalty_points', $points);
+        }
 
         PointTransaction::create([
-            'customer_id' => $customer->id,
+            'tenant_id' => tenant_id(),
+            'customer_id' => $customerId,
             'transaction_id' => $transaction->id,
             'type' => 'earn',
             'points' => $points,
@@ -57,12 +64,19 @@ class PointService
         ]);
     }
 
-    public static function redeemPoints(Customer $customer, Transaction $transaction, int $points): void
+    public static function redeemPoints(int $customerId, Transaction $transaction, int $points): void
     {
-        $customer->decrement('loyalty_points', $points);
+        $storeCustomer = StoreCustomer::where('customer_id', $customerId)
+            ->where('tenant_id', tenant_id())
+            ->first();
+
+        if ($storeCustomer) {
+            $storeCustomer->decrement('loyalty_points', $points);
+        }
 
         PointTransaction::create([
-            'customer_id' => $customer->id,
+            'tenant_id' => tenant_id(),
+            'customer_id' => $customerId,
             'transaction_id' => $transaction->id,
             'type' => 'redeem',
             'points' => $points,

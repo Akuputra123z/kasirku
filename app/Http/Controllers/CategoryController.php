@@ -6,6 +6,7 @@ use App\Exports\CategoryTemplateExport;
 use App\Http\Requests\StoreCategoryRequest;
 use App\Http\Requests\UpdateCategoryRequest;
 use App\Models\Category;
+use App\Models\MarketplaceCategory;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Gate;
@@ -25,14 +26,31 @@ class CategoryController extends Controller
 
         $search = $request->get('search');
 
-        $categories = Category::when($search, fn ($q, $s) => $q->where('name', 'like', "%{$s}%"))
+        $categories = Category::with('marketplaceCategory')
+            ->when($search, fn ($q, $s) => $q->where('name', 'like', "%{$s}%"))
             ->latest()
             ->paginate(10)
             ->withQueryString();
 
+        $parents = MarketplaceCategory::with(['children' => fn ($q) => $q->where('is_active', true)->orderBy('sort_order')])
+            ->whereNull('parent_id')
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->get(['id', 'name']);
+
+        $marketplaceCategories = $parents->map(fn ($parent) => [
+            'id' => $parent->id,
+            'name' => $parent->name,
+            'children' => $parent->children->map(fn ($child) => [
+                'id' => $child->id,
+                'name' => $child->name,
+            ]),
+        ]);
+
         return Inertia::render('categories/index', [
             'categories' => $categories,
             'filters' => ['search' => $search],
+            'marketplaceCategories' => $marketplaceCategories,
         ]);
     }
 
@@ -43,7 +61,10 @@ class CategoryController extends Controller
     {
         Gate::authorize('manage-categories');
 
-        Category::create($request->validated());
+        $data = $request->validated();
+        $data['marketplace_category_id'] = $this->normalizeMarketplaceCategory($data['marketplace_category_id'] ?? null);
+
+        Category::create($data);
 
         return redirect()->back()->with('success', 'Category created successfully.');
     }
@@ -55,9 +76,21 @@ class CategoryController extends Controller
     {
         Gate::authorize('manage-categories');
 
-        $category->update($request->validated());
+        $data = $request->validated();
+        $data['marketplace_category_id'] = $this->normalizeMarketplaceCategory($data['marketplace_category_id'] ?? null);
+
+        $category->update($data);
 
         return redirect()->back()->with('success', 'Category updated successfully.');
+    }
+
+    private function normalizeMarketplaceCategory(mixed $value): ?int
+    {
+        if (blank($value) || $value === 'none') {
+            return null;
+        }
+
+        return (int) $value;
     }
 
     /**

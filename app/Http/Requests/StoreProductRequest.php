@@ -40,6 +40,10 @@ class StoreProductRequest extends FormRequest
             'extras' => ['nullable', 'array'],
             'extras.*.name' => ['required_with:extras', 'string', 'max:255'],
             'extras.*.price' => ['required_with:extras', 'numeric', 'min:0'],
+            'visible_online' => ['nullable', 'boolean'],
+            'online_price' => ['nullable', 'numeric', 'min:0'],
+            'stock_online' => ['nullable', 'integer', 'min:0'],
+            'weight' => ['nullable', 'integer', 'min:0'],
         ];
     }
 }

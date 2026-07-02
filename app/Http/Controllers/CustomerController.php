@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Models\StoreCustomer;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class CustomerController extends Controller
@@ -16,12 +16,15 @@ class CustomerController extends Controller
         Gate::authorize('manage-customers');
 
         $search = $request->get('search');
+        $tenantId = tenant_id();
 
-        $customers = Customer::when($search, function ($q, $search) {
-            $q->where('name', 'like', "%{$search}%")
-                ->orWhere('email', 'like', "%{$search}%")
-                ->orWhere('phone', 'like', "%{$search}%");
-        })
+        $customers = Customer::whereHas('stores', fn ($q) => $q->where('tenant_id', $tenantId))
+            ->with(['storeCustomer' => fn ($q) => $q->where('tenant_id', $tenantId)])
+            ->when($search, function ($q, $search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
+            })
             ->withCount('transactions')
             ->latest()
             ->paginate(10);
@@ -67,17 +70,31 @@ class CustomerController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => ['nullable', 'email', Rule::unique('customers', 'email')->whereNull('deleted_at')->where('tenant_id', tenant_id())],
+            'email' => ['nullable', 'email'],
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:500',
         ]);
 
         $customer = Customer::create($validated);
 
+        StoreCustomer::create([
+            'customer_id' => $customer->id,
+            'tenant_id' => tenant_id(),
+            'loyalty_points' => 0,
+        ]);
+
         if (! $request->header('X-Inertia') && $request->wantsJson()) {
-            return response()->json($customer->only([
-                'id', 'name', 'phone', 'email', 'loyalty_points',
-            ]), 201);
+            $storeCustomer = StoreCustomer::where('customer_id', $customer->id)
+                ->where('tenant_id', tenant_id())
+                ->first();
+
+            return response()->json([
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'phone' => $customer->phone,
+                'email' => $customer->email,
+                'loyalty_points' => $storeCustomer?->loyalty_points ?? 0,
+            ], 201);
         }
 
         return redirect()->back()->with('success', 'Pelanggan berhasil ditambahkan.');
@@ -89,7 +106,7 @@ class CustomerController extends Controller
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => ['nullable', 'email', Rule::unique('customers', 'email')->whereNull('deleted_at')->where('tenant_id', tenant_id())->ignore($customer->id)],
+            'email' => ['nullable', 'email'],
             'phone' => 'nullable|string|max:20',
             'address' => 'nullable|string|max:500',
         ]);
@@ -102,6 +119,10 @@ class CustomerController extends Controller
     public function destroy(Customer $customer)
     {
         Gate::authorize('manage-customers');
+
+        StoreCustomer::where('customer_id', $customer->id)
+            ->where('tenant_id', tenant_id())
+            ->delete();
 
         $customer->delete();
 

@@ -3,8 +3,10 @@
 namespace Database\Seeders;
 
 use App\Models\Tenant;
+use App\Models\TenantUser;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Spatie\Permission\Models\Role;
 
 class DatabaseSeeder extends Seeder
 {
@@ -25,22 +27,61 @@ class DatabaseSeeder extends Seeder
 
         User::firstOrCreate(
             ['email' => 'superadmin@mypos.com'],
-            ['name' => 'Super Admin', 'password' => bcrypt('password'), 'email_verified_at' => now(), 'tenant_id' => null]
+            [
+                'name' => 'Super Admin',
+                'password' => bcrypt('password'),
+                'email_verified_at' => now(),
+            ]
         )->assignRole('super-admin');
 
         $admin = User::firstOrCreate(
             ['email' => 'admin@demo-toko.com'],
-            ['name' => 'Admin Toko', 'password' => bcrypt('password'), 'email_verified_at' => now(), 'tenant_id' => $tenant->id]
+            [
+                'name' => 'Admin Toko',
+                'password' => bcrypt('password'),
+                'email_verified_at' => now(),
+            ]
         );
-        $admin->assignRole('admin');
+        $adminRole = Role::where('name', 'admin')
+            ->where('tenant_id', $tenant->id)
+            ->first();
+        if ($adminRole) {
+            $admin->assignRole($adminRole);
+        }
+
+        TenantUser::firstOrCreate([
+            'user_id' => $admin->id,
+            'tenant_id' => $tenant->id,
+            'role' => 'owner',
+        ]);
 
         $kasir = User::firstOrCreate(
             ['email' => 'kasir@demo-toko.com'],
-            ['name' => 'Kasir Toko', 'password' => bcrypt('password'), 'email_verified_at' => now(), 'tenant_id' => $tenant->id]
+            [
+                'name' => 'Kasir Toko',
+                'password' => bcrypt('password'),
+                'email_verified_at' => now(),
+            ]
         );
-        $kasir->assignRole('kasir');
+        $kasirRole = Role::where('name', 'kasir')
+            ->where('tenant_id', $tenant->id)
+            ->first();
+        if ($kasirRole) {
+            $kasir->assignRole($kasirRole);
+        }
+
+        TenantUser::firstOrCreate([
+            'user_id' => $kasir->id,
+            'tenant_id' => $tenant->id,
+            'role' => 'staff',
+        ]);
 
         (new CategorySeeder)->run($tenant->id);
         (new BrandSeeder)->run($tenant->id);
+
+        if (app()->environment('local', 'testing')) {
+            $this->call(DummyDataSeeder::class);
+            $this->call(MarketplaceDummyDataSeeder::class);
+        }
     }
 }

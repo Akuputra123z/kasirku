@@ -18,8 +18,10 @@ class EnsureTenantActive
 
                 return redirect()->route('suspended');
             }
+
+            return $next($request);
         }
 
-        return $next($request);
+        return redirect()->route('marketplace.customer.dashboard');
     }
 }

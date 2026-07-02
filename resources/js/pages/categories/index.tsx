@@ -1,5 +1,5 @@
 'use client';
-import { Head, useForm, router } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
     ChevronLeft,
@@ -9,7 +9,6 @@ import {
     MoreHorizontal,
     Plus,
     Search,
-    CheckCircle2,
     Tag,
     X,
 } from 'lucide-react';
@@ -17,7 +16,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
 import { ImportDialog } from '@/components/import-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -39,6 +37,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
     Table,
     TableBody,
     TableCell,
@@ -48,10 +53,24 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 
+interface MarketplaceCategoryGroup {
+    id: number;
+    name: string;
+    children: { id: number; name: string }[];
+}
+
+interface MarketplaceCategoryRef {
+    id: number;
+    name: string;
+    parent_id: number | null;
+}
+
 interface Category {
     id: number;
     name: string;
     description: string | null;
+    marketplace_category_id: number | null;
+    marketplace_category: MarketplaceCategoryRef | null;
     created_at: string;
 }
 
@@ -66,10 +85,11 @@ interface Paginator<T> {
 interface Props {
     categories: Paginator<Category>;
     filters: { search: string | null };
+    marketplaceCategories: MarketplaceCategoryGroup[];
     flash?: { success?: string; error?: string };
 }
 
-export default function Index({ categories, filters, flash }: Props) {
+export default function Index({ categories, filters, marketplaceCategories, flash }: Props) {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(
@@ -77,14 +97,38 @@ export default function Index({ categories, filters, flash }: Props) {
     );
     const [searchQuery, setSearchQuery] = useState(filters?.search ?? '');
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [marketplaceParentId, setMarketplaceParentId] = useState('none');
+    const [marketplaceChildId, setMarketplaceChildId] = useState('none');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const { data, setData, post, put, processing, errors, reset, clearErrors } =
+    const { data, setData, post, put, errors, reset, clearErrors } =
         useForm({
             name: '',
             description: '',
         });
 
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        if (marketplaceChildId !== 'none') {
+            const child = marketplaceCategories
+                .flatMap((p) => p.children)
+                .find((c) => c.id.toString() === marketplaceChildId);
+            if (child) {
+                setData('name', child.name);
+                return;
+            }
+        }
+        if (marketplaceParentId !== 'none') {
+            const parent = marketplaceCategories.find(
+                (p) => p.id.toString() === marketplaceParentId,
+            );
+            if (parent) {
+                setData('name', parent.name);
+                return;
+            }
+        }
+    }, [marketplaceParentId, marketplaceChildId, marketplaceCategories]);
 
     const debouncedSearch = useCallback((value: string) => {
         setSearchQuery(value);
@@ -101,6 +145,11 @@ export default function Index({ categories, filters, flash }: Props) {
             );
         }, 300);
     }, []);
+
+    useEffect(() => {
+        if (flash?.success) toast.success(flash.success);
+        if (flash?.error) toast.error(flash.error);
+    }, [flash]);
 
     useEffect(
         () => () => {
@@ -123,6 +172,8 @@ export default function Index({ categories, filters, flash }: Props) {
         setEditingCategory(null);
         reset();
         clearErrors();
+        setMarketplaceParentId('none');
+        setMarketplaceChildId('none');
         setIsDialogOpen(true);
     };
 
@@ -133,29 +184,53 @@ export default function Index({ categories, filters, flash }: Props) {
             description: category.description || '',
         });
         clearErrors();
+
+        if (category.marketplace_category && category.marketplace_category.parent_id) {
+            setMarketplaceParentId(category.marketplace_category.parent_id.toString());
+            setMarketplaceChildId(category.marketplace_category.id.toString());
+        } else if (category.marketplace_category) {
+            setMarketplaceParentId(category.marketplace_category.id.toString());
+            setMarketplaceChildId('none');
+        } else {
+            setMarketplaceParentId('none');
+            setMarketplaceChildId('none');
+        }
+
         setIsDialogOpen(true);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (editingCategory) {
-            put(route('categories.update', editingCategory.id), {
-                onSuccess: () => {
-                    setIsDialogOpen(false);
-                    toast.success('Kategori berhasil diperbarui');
-                },
-                preserveScroll: true,
-            });
-        } else {
-            post(route('categories.store'), {
-                onSuccess: () => {
-                    setIsDialogOpen(false);
+        data.marketplace_category_id = marketplaceChildId !== 'none'
+            ? Number(marketplaceChildId)
+            : marketplaceParentId !== 'none'
+                ? Number(marketplaceParentId)
+                : null;
+
+        setIsSubmitting(true);
+
+        const options = {
+            onSuccess: () => {
+                setIsDialogOpen(false);
+                if (!editingCategory) {
                     reset();
-                    toast.success('Kategori berhasil dibuat');
-                },
-                preserveScroll: true,
-            });
+                    setMarketplaceParentId('none');
+                    setMarketplaceChildId('none');
+                }
+                setIsSubmitting(false);
+            },
+            onError: (err: Record<string, string>) => {
+                toast.error(Object.values(err).join('\n') || 'Terjadi kesalahan');
+                setIsSubmitting(false);
+            },
+            preserveScroll: true,
+        };
+
+        if (editingCategory) {
+            put(route('categories.update', editingCategory.id), options);
+        } else {
+            post(route('categories.store'), options);
         }
     };
 
@@ -238,9 +313,6 @@ export default function Index({ categories, filters, flash }: Props) {
                                     <TableHead className="py-3 text-[13px] font-semibold text-foreground">
                                         Deskripsi
                                     </TableHead>
-                                    <TableHead className="py-3 text-[13px] font-semibold text-foreground">
-                                        Status
-                                    </TableHead>
                                     <TableHead className="py-3 pr-6 text-right text-[13px] font-semibold text-foreground">
                                         Tanggal
                                     </TableHead>
@@ -274,14 +346,6 @@ export default function Index({ categories, filters, flash }: Props) {
                                                         {category.description ||
                                                             '—'}
                                                     </span>
-                                                </TableCell>
-                                                <TableCell className="py-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <CheckCircle2 className="size-3.5 text-blue-500" />
-                                                        <span className="text-[13px] font-medium">
-                                                            Aktif
-                                                        </span>
-                                                    </div>
                                                 </TableCell>
                                                 <TableCell className="py-3 pr-6 text-right">
                                                     <span className="text-[13px] text-muted-foreground">
@@ -415,7 +479,16 @@ export default function Index({ categories, filters, flash }: Props) {
                 </div>
             )}
 
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <Dialog open={isDialogOpen} onOpenChange={(open) => {
+                if (!open) {
+                    reset();
+                    setMarketplaceParentId('none');
+                    setMarketplaceChildId('none');
+                    setEditingCategory(null);
+                    clearErrors();
+                }
+                setIsDialogOpen(open);
+            }}>
                 <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-[425px]">
                     <form onSubmit={handleSubmit}>
                         <DialogHeader>
@@ -431,28 +504,53 @@ export default function Index({ categories, filters, flash }: Props) {
                             </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-6">
+
                             <div className="grid gap-2">
-                                <Label htmlFor="name">Nama Kategori</Label>
-                                <Input
-                                    id="name"
-                                    value={data.name}
-                                    onChange={(e) =>
-                                        setData('name', e.target.value)
-                                    }
-                                    className={
-                                        errors.name
-                                            ? 'h-10 border-red-500'
-                                            : 'h-10'
-                                    }
-                                    placeholder="Contoh: Laptop"
-                                    required
-                                />
-                                {errors.name && (
-                                    <p className="text-[11px] font-medium text-red-500">
-                                        {errors.name}
-                                    </p>
-                                )}
+                                <Label>Induk Kategori Marketplace</Label>
+                                <Select
+                                    value={marketplaceParentId}
+                                    onValueChange={(v) => {
+                                        setMarketplaceParentId(v);
+                                        setMarketplaceChildId('none');
+                                    }}
+                                >
+                                    <SelectTrigger className="h-10">
+                                        <SelectValue placeholder="Pilih induk kategori..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">Tidak ada</SelectItem>
+                                        {marketplaceCategories.map((p) => (
+                                            <SelectItem key={p.id} value={p.id.toString()}>
+                                                {p.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
+                            {marketplaceParentId !== 'none' && (
+                                <div className="grid gap-2">
+                                    <Label>Sub-kategori Marketplace (Opsional)</Label>
+                                    <Select
+                                        value={marketplaceChildId}
+                                        onValueChange={(v) => setMarketplaceChildId(v)}
+                                    >
+                                        <SelectTrigger className="h-10">
+                                            <SelectValue placeholder="Pilih sub-kategori..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">Semua sub-kategori</SelectItem>
+                                            {marketplaceCategories
+                                                .find((p) => p.id.toString() === marketplaceParentId)
+                                                ?.children.map((c) => (
+                                                    <SelectItem key={c.id} value={c.id.toString()}>
+                                                        {c.name}
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+                           
                             <div className="grid gap-2">
                                 <Label htmlFor="description">
                                     Deskripsi (Opsional)
@@ -472,6 +570,12 @@ export default function Index({ categories, filters, flash }: Props) {
                                     </p>
                                 )}
                             </div>
+                            
+                            {errors.marketplace_category_id && (
+                                <p className="text-[11px] font-medium text-red-500">
+                                    {errors.marketplace_category_id}
+                                </p>
+                            )}
                         </div>
                         <DialogFooter className="gap-2 sm:gap-0">
                             <Button
@@ -484,7 +588,7 @@ export default function Index({ categories, filters, flash }: Props) {
                             </Button>
                             <Button
                                 type="submit"
-                                disabled={processing}
+                                disabled={isSubmitting}
                                 className="flex-1 bg-black text-white dark:bg-white dark:text-black"
                             >
                                 {editingCategory

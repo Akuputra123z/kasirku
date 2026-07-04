@@ -1916,6 +1916,10 @@ export default function POS({
                                       }
                                     : null
                             }
+                            paperSize={
+                                (tenant as any)?.settings?.printing
+                                    ?.paper_size ?? '58'
+                            }
                         />
                     </div>
                 </DialogContent>

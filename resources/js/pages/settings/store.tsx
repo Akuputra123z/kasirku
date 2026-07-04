@@ -34,6 +34,7 @@ export default function StoreSettings() {
         color_theme: ColorTheme;
         receipt_footer: string;
         print_driver: string;
+        print_paper_size: string;
         print_usb_printer: string;
         print_bluetooth_device: string;
         print_bluetooth_mac: string;
@@ -55,6 +56,8 @@ export default function StoreSettings() {
         receipt_footer:
             (tenant as any)?.settings?.receipt_footer ?? 'TERIMA KASIH',
         print_driver: (tenant as any)?.settings?.printing?.driver ?? 'file',
+        print_paper_size:
+            (tenant as any)?.settings?.printing?.paper_size ?? '58',
         print_usb_printer:
             (tenant as any)?.settings?.printing?.connectors?.usb?.printer ?? '',
         print_bluetooth_device:
@@ -382,6 +385,39 @@ export default function StoreSettings() {
                                     receipt printing.
                                 </p>
                                 <InputError message={errors.print_driver} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="print_paper_size">
+                                    Ukuran Kertas
+                                </Label>
+                                <select
+                                    id="print_paper_size"
+                                    value={data.print_paper_size}
+                                    onChange={(e) =>
+                                        setData(
+                                            'print_paper_size',
+                                            e.target.value,
+                                        )
+                                    }
+                                    className="flex h-10 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-800 dark:bg-neutral-950 dark:ring-offset-neutral-950 dark:focus-visible:ring-neutral-300"
+                                >
+                                    <option value="58">
+                                        58mm x 297mm (2.25&quot;) — 32
+                                        karakter/baris
+                                    </option>
+                                    <option value="80">
+                                        80mm x 297mm (3.125&quot;) — 42
+                                        karakter/baris
+                                    </option>
+                                </select>
+                                <p className="text-[11px] font-medium text-neutral-400">
+                                    Pilih ukuran kertas thermal printer yang
+                                    digunakan.
+                                </p>
+                                <InputError
+                                    message={errors.print_paper_size}
+                                />
                             </div>
 
                             {data.print_driver === 'usb' && (

@@ -116,15 +116,22 @@ interface ReceiptData {
     footer: string;
 }
 
-const W = 32;
-const LBL = 12;
-const VAL = W - LBL;
+const PAPER_WIDTH: Record<string, number> = {
+    '58': 32,
+    '80': 42,
+};
 
-function lineItem(lbl: string, val: string): string {
-    return padRight(lbl, LBL) + padLeft(val, VAL) + '\n';
+function lineItem(lbl: string, val: string, w: number): string {
+    const lblW = 12;
+    const valW = w - lblW;
+
+    return padRight(lbl, lblW) + padLeft(val, valW) + '\n';
 }
 
-export function buildReceipt(data: ReceiptData): Uint8Array {
+export function buildReceipt(data: ReceiptData, paperSize = '58'): Uint8Array {
+    const W = PAPER_WIDTH[paperSize] || 32;
+    const LBL = 12;
+    const VAL = W - LBL;
     const e = new EscposBuilder();
 
     e.init();
@@ -196,24 +203,24 @@ export function buildReceipt(data: ReceiptData): Uint8Array {
 
     // Totals
     e.left();
-    e.line(lineItem('Subtotal', formatIdrShort(data.subtotal)));
+    e.line(lineItem('Subtotal', formatIdrShort(data.subtotal), W));
 
     if (data.discount > 0) {
-        e.line(lineItem('Diskon', '-' + formatIdrShort(data.discount)));
+        e.line(lineItem('Diskon', '-' + formatIdrShort(data.discount), W));
     }
 
     if (data.tax > 0) {
-        e.line(lineItem('Pajak', '+' + formatIdrShort(data.tax)));
+        e.line(lineItem('Pajak', '+' + formatIdrShort(data.tax), W));
     }
 
     e.separator('=', W);
     e.selectPrintMode(TXT.EMPHASIZED);
-    e.line(lineItem('Total', formatIdrShort(data.total)));
+    e.line(lineItem('Total', formatIdrShort(data.total), W));
     e.selectPrintMode(TXT.NORMAL);
     e.separator('=', W);
 
-    e.line(lineItem('Tunai', formatIdrShort(data.paid)));
-    e.line(lineItem('Kembali', formatIdrShort(data.change)));
+    e.line(lineItem('Tunai', formatIdrShort(data.paid), W));
+    e.line(lineItem('Kembali', formatIdrShort(data.change), W));
     e.feed(2);
 
     // Footer

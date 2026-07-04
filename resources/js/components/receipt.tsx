@@ -1,5 +1,10 @@
 import React from 'react';
 
+const PAPER_SIZE_CLASS: Record<string, string> = {
+    '58': 'w-[58mm]',
+    '80': 'w-[80mm]',
+};
+
 interface ReceiptProps {
     transaction: {
         transaction_code: string;
@@ -28,10 +33,11 @@ interface ReceiptProps {
         phone?: string;
         footer?: string;
     } | null;
+    paperSize?: string;
 }
 
 export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
-    ({ transaction, store }, ref) => {
+    ({ transaction, store, paperSize = '58' }, ref) => {
         const formatCurrency = (val: number) => {
             return new Intl.NumberFormat('id-ID', {
                 style: 'currency',
@@ -63,7 +69,7 @@ export const Receipt = React.forwardRef<HTMLDivElement, ReceiptProps>(
         return (
             <div
                 ref={ref}
-                className="hidden w-[80mm] bg-white p-4 font-mono text-[12px] leading-tight text-black print:block"
+                className={`hidden bg-white p-4 font-mono text-[12px] leading-tight text-black print:block ${PAPER_SIZE_CLASS[paperSize] || 'w-[80mm]'}`}
             >
                 {/* Header Toko */}
                 <div className="mb-4 text-center">

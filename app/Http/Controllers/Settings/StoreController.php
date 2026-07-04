@@ -39,6 +39,7 @@ class StoreController extends Controller
             'min_redeem_points' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'receipt_footer' => ['nullable', 'string', 'max:200'],
             'print_driver' => ['nullable', 'string', 'in:file,usb,bluetooth,network,windows'],
+            'print_paper_size' => ['nullable', 'string', 'in:58,80'],
             'print_usb_printer' => ['nullable', 'string', 'max:255'],
             'print_bluetooth_device' => ['nullable', 'string', 'max:255'],
             'print_bluetooth_mac' => ['nullable', 'string', 'max:255'],
@@ -79,6 +80,7 @@ class StoreController extends Controller
             'receipt_footer' => $validated['receipt_footer'] ?? 'TERIMA KASIH',
             'printing' => [
                 'driver' => $validated['print_driver'] ?? 'file',
+                'paper_size' => $validated['print_paper_size'] ?? '58',
                 'connectors' => [
                     'usb' => [
                         'printer' => $validated['print_usb_printer'] ?? '',

@@ -27,6 +27,21 @@ trait ReceiptPrinter
     }
 
     /**
+     * Get receipt character width based on paper size.
+     */
+    protected function getReceiptWidth(): int
+    {
+        $tenant = tenant();
+        $paperSize = config('printing.receipt.paper_size', '58');
+
+        if ($tenant && isset($tenant->settings['printing']['paper_size'])) {
+            $paperSize = $tenant->settings['printing']['paper_size'];
+        }
+
+        return config('printing.paper_sizes.'.$paperSize, 32);
+    }
+
+    /**
      * Get default print driver.
      */
     protected function getDefaultDriver(): string
@@ -100,7 +115,7 @@ trait ReceiptPrinter
     {
         $printer = new Printer($connector);
 
-        $width = config('printing.receipt.width', 32);
+        $width = $this->getReceiptWidth();
         $tenant = tenant();
 
         if ($tenant) {

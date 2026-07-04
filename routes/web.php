@@ -68,6 +68,7 @@ Route::middleware('marketplace.context')->group(function () {
 
         Route::get('/customer/orders', [MarketplaceCustomerController::class, 'dashboard'])->defaults('initialSection', 'transaksi')->name('marketplace.orders');
         Route::get('/customer/settings', [MarketplaceCustomerController::class, 'dashboard'])->defaults('initialSection', 'pengaturan')->name('marketplace.customer.settings');
+        Route::get('/customer/notifications', [MarketplaceCustomerController::class, 'dashboard'])->defaults('initialSection', 'notifications')->name('marketplace.customer.notifications');
         Route::get('/customer/orders/{order}/payment', [MarketplaceOrderController::class, 'payment'])->name('marketplace.orders.payment');
         Route::post('/customer/orders/{order}/pay', [MarketplaceOrderController::class, 'pay'])->name('marketplace.orders.pay');
         Route::post('/customer/orders/{order}/cancel', [MarketplaceOrderController::class, 'cancel'])->name('marketplace.orders.cancel');

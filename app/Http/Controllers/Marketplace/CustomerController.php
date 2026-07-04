@@ -159,6 +159,18 @@ class CustomerController extends Controller
                     ]),
                 ]),
             'initialSection' => $request->route('initialSection', $request->query('section', 'beranda')),
+            'notifications' => $user->notifications()
+                ->orderBy('created_at', 'desc')
+                ->take(20)
+                ->get()
+                ->map(fn ($n) => [
+                    'id' => $n->id,
+                    'type' => class_basename($n->type),
+                    'data' => $n->data,
+                    'read_at' => $n->read_at,
+                    'created_at' => $n->created_at->diffForHumans(),
+                ]),
+            'unreadCount' => $user->unreadNotifications()->count(),
         ]);
     }
 

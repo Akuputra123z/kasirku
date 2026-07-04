@@ -5,7 +5,7 @@ import {
     Receipt, Heart, Wallet, TrendingUp, Award, Ticket,
     ChevronRight, ChevronLeft, Search, BadgeCheck, Star,
     Package, Truck, Home, Check, Info, Store, Camera, User,
-    Clock, AlertTriangle, MessageCircle, MapPin,
+    Clock, AlertTriangle, MessageCircle, MapPin, Bell,
     Plus, Pencil, Trash2, CheckCircle, Building, KeyRound, CreditCard, Eye,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -431,7 +431,7 @@ function BankAccountSection({ accounts }: { accounts: BankAccount[] }) {
 }
 
 export default function CustomerDashboard() {
-    const { auth, cartCount, stats, activeOrder, recentOrders, orders, recommendations, memberLevel, pointsToNextLevel, addresses, bankAccounts, complaints, initialSection } = usePage<any>().props;
+    const { auth, cartCount, stats, activeOrder, recentOrders, orders, recommendations, memberLevel, pointsToNextLevel, addresses, bankAccounts, complaints, initialSection, notifications, unreadCount } = usePage<any>().props;
     const user = auth?.user;
     const [activeSection, setActiveSection] = useState(initialSection || 'beranda');
 
@@ -469,7 +469,7 @@ export default function CustomerDashboard() {
             chat: 'Chat', ulasan: 'Ulasan', bantuan: 'Pesan Bantuan',
             komplain: 'Pesanan Dikomplain', menunggu: 'Menunggu Pembayaran',
             transaksi: 'Daftar Transaksi', wishlist: 'Wishlist',
-            pengaturan: 'Pengaturan',
+            pengaturan: 'Pengaturan', notifications: 'Notifikasi',
         };
         return map[activeSection] || 'Dashboard';
     }
@@ -1523,6 +1523,43 @@ export default function CustomerDashboard() {
                                 
                             </div>
                         </>
+                        )}
+
+                        {/* ── Notifications ── */}
+                        {activeSection === 'notifications' && (
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-bold text-lg">Notifikasi</h3>
+                                    {unreadCount > 0 && (
+                                        <span className="text-xs text-slate-500">{unreadCount} belum dibaca</span>
+                                    )}
+                                </div>
+                                {(!notifications || notifications.length === 0) ? (
+                                    <div className="text-center py-12">
+                                        <Bell className="size-12 mx-auto text-gray-300 mb-3" />
+                                        <p className="text-slate-500">Belum ada notifikasi</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {notifications.map((n: any) => (
+                                            <div key={n.id} className={`p-4 rounded-xl border ${n.read_at ? 'border-gray-100' : 'border-[#4648d4] bg-[#eef0ff]'} transition-colors`}>
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium text-slate-900">{n.data?.message || n.type}</p>
+                                                        {n.data?.description && (
+                                                            <p className="text-xs text-slate-500 mt-1">{n.data.description}</p>
+                                                        )}
+                                                        <p className="text-[10px] text-slate-400 mt-2">{n.created_at}</p>
+                                                    </div>
+                                                    {!n.read_at && (
+                                                        <span className="w-2 h-2 bg-[#4648d4] rounded-full shrink-0 mt-2"></span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         )}
 
                         {/* ── Wishlist ── */}

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 
 class MidtransService
 {
-    protected ?string $serverKey;
+    protected string $serverKey = '';
 
     protected string $snapUrl;
 
@@ -16,14 +16,19 @@ class MidtransService
 
     public function __construct()
     {
-        $this->serverKey = config('midtrans.server_key');
-        $isProduction = config('midtrans.is_production');
+        $this->serverKey = config('midtrans.server_key') ?? '';
+        $isProduction = config('midtrans.is_production', false);
         $this->snapUrl = $isProduction
             ? 'https://app.midtrans.com/snap/v1'
             : 'https://app.sandbox.midtrans.com/snap/v1';
         $this->apiUrl = $isProduction
             ? 'https://api.midtrans.com/v2'
             : 'https://api.sandbox.midtrans.com/v2';
+    }
+
+    private function isConfigured(): bool
+    {
+        return $this->serverKey !== '';
     }
 
     public function createSnapTransaction(Order $order, array $customerDetails, ?string $finishRedirectUrl = null, ?string $snapOrderId = null): ?array
@@ -67,6 +72,12 @@ class MidtransService
             $params['callbacks'] = [
                 'finish' => $finishRedirectUrl,
             ];
+        }
+
+        if (! $this->isConfigured()) {
+            Log::error('Midtrans server key tidak dikonfigurasi');
+
+            return null;
         }
 
         $response = Http::withBasicAuth($this->serverKey, '')
@@ -128,6 +139,12 @@ class MidtransService
             ];
         }
 
+        if (! $this->isConfigured()) {
+            Log::error('Midtrans server key tidak dikonfigurasi (direct)');
+
+            return null;
+        }
+
         $response = Http::withBasicAuth($this->serverKey, '')
             ->withHeaders(['Content-Type' => 'application/json'])
             ->timeout(30)
@@ -150,6 +167,10 @@ class MidtransService
 
     public function getTransactionStatus(string $orderId): ?array
     {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
         $response = Http::withBasicAuth($this->serverKey, '')
             ->withHeaders(['Accept' => 'application/json'])
             ->timeout(15)
@@ -170,6 +191,10 @@ class MidtransService
 
     public function cancelTransaction(string $orderId): bool
     {
+        if (! $this->isConfigured()) {
+            return false;
+        }
+
         $response = Http::withBasicAuth($this->serverKey, '')
             ->withHeaders(['Content-Type' => 'application/json'])
             ->timeout(15)

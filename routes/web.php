@@ -120,6 +120,7 @@ Route::name('admin.')->group(function () {
         'permission:manage-tenants',
     ])->group(function () {
         Route::get('admin/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
+        Route::post('admin/subscription/toggle', [TenantController::class, 'toggleSubscription'])->name('subscription.toggle');
         Route::get('admin/tenants', [TenantController::class, 'index'])->name('tenants');
         Route::post('admin/tenants/bulk-action', [TenantController::class, 'bulkAction'])->name('tenants.bulk-action');
         Route::get('admin/tenants/{tenant}/edit', [TenantController::class, 'edit'])->name('tenants.edit');

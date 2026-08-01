@@ -26,6 +26,7 @@ class ChatController extends Controller
     {
         $conversations = Conversation::where('user_id', Auth::id())
             ->with(['tenant:id,slug,name,logo', 'latestMessage'])
+            ->withCount(['messages as unread_count' => fn ($q) => $q->whereNull('read_at')->where('sender_id', '!=', Auth::id())])
             ->orderBy('last_message_at', 'desc')
             ->paginate(20)
             ->withQueryString()
@@ -39,7 +40,7 @@ class ChatController extends Controller
                 'subject' => $c->subject,
                 'last_message' => $c->latestMessage?->body,
                 'last_message_at' => $c->latestMessage?->created_at?->diffForHumans(),
-                'unread_count' => $c->unreadCountFor(Auth::id()),
+                'unread_count' => $c->unread_count ?? $c->unreadCountFor(Auth::id()),
             ]);
 
         $activeConversation = null;

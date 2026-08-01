@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'enabled' => (bool) env('SUBSCRIPTION_ENABLED', true),
+
     'limits' => [
         'products' => (int) env('SUBSCRIPTION_LIMIT_PRODUCTS', 50),
         'staff' => (int) env('SUBSCRIPTION_LIMIT_STAFF', 2),

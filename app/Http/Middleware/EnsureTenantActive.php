@@ -22,6 +22,10 @@ class EnsureTenantActive
             return $next($request);
         }
 
+        if ($request->user() && $request->user()->can('manage-tenants')) {
+            return redirect()->route('admin.tenants');
+        }
+
         return redirect()->route('marketplace.customer.dashboard');
     }
 }

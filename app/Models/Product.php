@@ -83,6 +83,10 @@ class Product extends Model
 
     protected $appends = ['image_url', 'display_price', 'available_stock'];
 
+    protected $attributes = [
+        'weight' => 0,
+    ];
+
     protected $casts = [
         'price' => 'float',
         'cost_price' => 'float',

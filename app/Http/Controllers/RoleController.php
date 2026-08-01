@@ -17,6 +17,7 @@ class RoleController extends Controller
         $roles = Role::where('guard_name', 'web')
             ->where('name', '!=', 'super-admin')
             ->where('tenant_id', tenant_id())
+            ->with('permissions')
             ->get()
             ->map(fn ($role) => [
                 'id' => $role->id,

@@ -58,7 +58,7 @@ class Customer extends Model
     public function vouchers(): BelongsToMany
     {
         return $this->belongsToMany(Voucher::class, 'customer_voucher')
-            ->withPivot(['used_at', 'transaction_id'])
+            ->withPivot(['redeemed_at', 'tenant_id'])
             ->withTimestamps();
     }
 

@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppSetting;
 use App\Models\Tenant;
+use Database\Seeders\TenantSeeder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -121,19 +123,40 @@ class TenantController extends Controller
             ->performedOn($tenant)
             ->withProperties(['ip' => request()->ip(), 'user_agent' => request()->userAgent()])
             ->event('reset')
-            ->log("Force reset DB for store: {$tenant->name}");
+            ->log("Force reset data for store: {$tenant->name}");
 
-        $tenant->run(function () {
-            Artisan::call('migrate:fresh', [
-                '--force' => true,
-                '--path' => 'database/migrations/tenant',
-            ]);
+        DB::transaction(function () use ($tenant) {
+            $tenantId = $tenant->id;
 
-            Artisan::call('db:seed', [
-                '--force' => true,
-                '--class' => config('tenancy.seeder_parameters.class'),
-            ]);
+            $tables = [
+                'transactions', // cascade: transaction_details, point_transactions
+                'orders', // cascade: order_items, payments, reviews, complaints
+                'conversations', // cascade: messages
+                'stock_movements',
+                'purchase_order_details',
+                'purchase_orders',
+                'serial_numbers',
+                'product_extras',
+                'product_variants',
+                'products',
+                'customer_voucher',
+                'vouchers',
+                'store_customer',
+                'shifts',
+                'payment_methods',
+                'suppliers',
+                'categories',
+                'brands',
+            ];
+
+            foreach ($tables as $table) {
+                DB::table($table)->where('tenant_id', $tenantId)->delete();
+            }
         });
+
+        app()->instance('current.tenant', $tenant);
+
+        (new TenantSeeder)->run();
 
         return redirect()->route('admin.tenants')
             ->with('success', "Store '{$tenant->name}' has been reset successfully.");
@@ -173,5 +196,25 @@ class TenantController extends Controller
         }
 
         return redirect('/admin/tenants');
+    }
+
+    /**
+     * Mengaktifkan / menonaktifkan fitur langganan secara global.
+     */
+    public function toggleSubscription(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'enabled' => 'required|boolean',
+        ]);
+
+        AppSetting::set('subscription_enabled', $validated['enabled'] ? '1' : '0');
+
+        activity()
+            ->causedBy(auth()->user())
+            ->withProperties(['enabled' => $validated['enabled'], 'ip' => $request->ip(), 'user_agent' => $request->userAgent()])
+            ->event($validated['enabled'] ? 'subscription_enabled' : 'subscription_disabled')
+            ->log('Fitur langganan '.($validated['enabled'] ? 'diaktifkan' : 'dinonaktifkan').' secara global');
+
+        return back()->with('success', 'Fitur langganan '.($validated['enabled'] ? 'diaktifkan' : 'dinonaktifkan').'.');
     }
 }

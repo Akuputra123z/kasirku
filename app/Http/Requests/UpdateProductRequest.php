@@ -37,6 +37,7 @@ class UpdateProductRequest extends FormRequest
             'variants.*.name' => ['required_with:variants', 'string', 'max:255'],
             'variants.*.additional_price' => ['required_with:variants', 'numeric', 'min:0'],
             'variants.*.stock' => ['nullable', 'integer', 'min:0'],
+            'variants.*.weight' => ['nullable', 'integer', 'min:0'],
             'variants.*.sku' => ['nullable', 'string', 'max:100'],
             'extras' => ['nullable', 'array'],
             'extras.*.id' => ['nullable', 'exists:product_extras,id'],

@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\Order;
 use App\Models\Tenant;
+use App\Services\SubscriptionService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -19,7 +21,11 @@ class AdminDashboardController extends Controller
         $activeTenants = Tenant::where('subscription_status', 'active')->count();
         $suspendedTenants = Tenant::where('subscription_status', 'suspended')->count();
 
-        $monthlyGrowth = Tenant::selectRaw("DATE_FORMAT(created_at, '%Y-%m') as month, COUNT(*) as count")
+        $monthExpr = DB::connection()->getDriverName() === 'sqlite'
+            ? "strftime('%Y-%m', created_at)"
+            : "DATE_FORMAT(created_at, '%Y-%m')";
+
+        $monthlyGrowth = Tenant::selectRaw("{$monthExpr} as month, COUNT(*) as count")
             ->where('created_at', '>=', now()->subMonths(12))
             ->groupBy('month')
             ->orderBy('month')
@@ -69,6 +75,7 @@ class AdminDashboardController extends Controller
             'monthlyGrowth' => $monthlyGrowth,
             'recentActivity' => $recentActivity,
             'latestTenants' => $latestTenants,
+            'subscriptionEnabled' => app(SubscriptionService::class)->isEnabled(),
         ]);
     }
 }

@@ -4,6 +4,7 @@ use App\Actions\Subscription\CheckExpiredSubscriptions;
 use App\Actions\Subscription\SendRenewalReminders;
 use App\Jobs\SyncDigiflazzPrices;
 use App\Models\AuditLog;
+use App\Services\SubscriptionService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -27,5 +28,7 @@ Artisan::command('digiflazz:sync', function () {
 Schedule::command('audit-log:prune 6')->daily();
 Schedule::job(new SyncDigiflazzPrices)->hourly();
 
-Schedule::call(new CheckExpiredSubscriptions)->hourly();
-Schedule::call(new SendRenewalReminders)->dailyAt('08:00');
+if (app(SubscriptionService::class)->isEnabled()) {
+    Schedule::call(new CheckExpiredSubscriptions)->hourly();
+    Schedule::call(new SendRenewalReminders)->dailyAt('08:00');
+}

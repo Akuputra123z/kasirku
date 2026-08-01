@@ -76,6 +76,8 @@ class ProductController extends Controller
 
         $validated = $request->validated();
 
+        $validated['weight'] = $validated['weight'] ?? 0;
+
         if ($tenant && ! $tenant->canMarketplace()) {
             $validated['visible_online'] = false;
         }
@@ -93,7 +95,13 @@ class ProductController extends Controller
         }
 
         if (! empty($validated['variants'])) {
-            $product->variants()->createMany($validated['variants']);
+            $product->variants()->createMany(
+                array_map(fn ($variant) => [
+                    ...$variant,
+                    'weight' => $variant['weight'] ?? 0,
+                    'stock' => $variant['stock'] ?? 0,
+                ], $validated['variants'])
+            );
         }
 
         return Redirect::back()->with('success', 'Product created successfully.');
@@ -107,6 +115,8 @@ class ProductController extends Controller
         Gate::authorize('manage-products');
 
         $validated = $request->validated();
+
+        $validated['weight'] = $validated['weight'] ?? 0;
 
         $tenant = tenant();
         if ($tenant && ! $tenant->canMarketplace()) {
@@ -137,10 +147,27 @@ class ProductController extends Controller
 
         if (isset($validated['variants'])) {
             $product->variants()->delete();
-            $product->variants()->createMany($validated['variants']);
+            $product->variants()->createMany(
+                array_map(fn ($variant) => [
+                    ...$variant,
+                    'weight' => $variant['weight'] ?? 0,
+                    'stock' => $variant['stock'] ?? 0,
+                ], $validated['variants'])
+            );
         }
 
         return Redirect::back()->with('success', 'Product updated successfully.');
+    }
+
+    /**
+     * Halaman edit tidak dipakai (edit inline di halaman index),
+     * arahkan ke halaman detail agar route tidak error.
+     */
+    public function edit(Product $product)
+    {
+        Gate::authorize('manage-products');
+
+        return Redirect::route('products.show', $product);
     }
 
     /**
@@ -366,6 +393,7 @@ class ProductController extends Controller
                     'price' => (float) $rowData['price'],
                     'cost_price' => ! blank($rowData['cost_price'] ?? null) ? (float) $rowData['cost_price'] : null,
                     'stock' => (int) ($rowData['stock'] ?? 0),
+                    'weight' => (int) ($rowData['weight'] ?? 0),
                     'barcode' => $barcode,
                     'category_id' => $category?->id,
                     'brand_id' => $brand?->id,

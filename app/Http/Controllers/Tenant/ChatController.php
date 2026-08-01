@@ -34,6 +34,7 @@ class ChatController extends Controller
             ->leftJoin('users', 'users.id', '=', 'conversations.user_id')
             ->select('conversations.*', 'users.name as customer_name', 'users.email as customer_email')
             ->with(['latestMessage'])
+            ->withCount(['messages as unread_count' => fn ($q) => $q->whereNull('read_at')->where('sender_id', '!=', Auth::id())])
             ->when($search, fn ($q) => $q->where(function ($q) use ($search) {
                 $q->where('users.name', 'like', "%{$search}%")
                     ->orWhere('conversations.subject', 'like', "%{$search}%")
@@ -69,7 +70,7 @@ class ChatController extends Controller
                 'subject' => $c->subject,
                 'last_message' => $c->latestMessage?->body,
                 'last_message_at' => $c->latestMessage?->created_at?->diffForHumans(),
-                'unread_count' => $c->unreadCountFor(Auth::id()),
+                'unread_count' => $c->unread_count ?? $c->unreadCountFor(Auth::id()),
             ]);
 
         return Inertia::render('tenant/chat/index', [

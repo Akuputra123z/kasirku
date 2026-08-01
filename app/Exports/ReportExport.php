@@ -8,6 +8,7 @@ use App\Models\PaymentMethod;
 use App\Models\Shift;
 use App\Models\Transaction;
 use App\Models\TransactionDetail;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -25,14 +26,23 @@ class ReportExport implements WithMultipleSheets
         protected string $endDate,
     ) {}
 
+    protected function dateRange(): array
+    {
+        return [
+            Carbon::parse($this->startDate)->startOfDay(),
+            Carbon::parse($this->endDate)->endOfDay(),
+        ];
+    }
+
     public function sheets(): array
     {
         $startDate = $this->startDate;
         $endDate = $this->endDate;
+        $range = $this->dateRange();
 
         // --- Data Queries ---
 
-        $summary = Transaction::whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+        $summary = Transaction::whereBetween('created_at', $range)
             ->selectRaw('
                 COUNT(*) as total_transactions,
                 COALESCE(SUM(subtotal_amount), 0) as total_subtotal,
@@ -45,7 +55,7 @@ class ReportExport implements WithMultipleSheets
             ')
             ->first();
 
-        $dailyReport = Transaction::whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+        $dailyReport = Transaction::whereBetween('created_at', $range)
             ->selectRaw('
                 DATE(created_at) as date,
                 COUNT(*) as transactions_count,
@@ -59,7 +69,7 @@ class ReportExport implements WithMultipleSheets
             ->orderBy('date', 'desc')
             ->get();
 
-        $paymentMethods = Transaction::whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+        $paymentMethodRows = Transaction::whereBetween('created_at', $range)
             ->selectRaw('
                 COALESCE(payment_method_id, 0) as payment_method_id,
                 COUNT(*) as transaction_count,
@@ -67,22 +77,27 @@ class ReportExport implements WithMultipleSheets
                 COALESCE(AVG(total_amount), 0) as avg_transaction
             ')
             ->groupBy('payment_method_id')
+            ->get();
+
+        $paymentMethods = PaymentMethod::whereIn('id', $paymentMethodRows->pluck('payment_method_id')->filter())
             ->get()
-            ->map(function ($item) {
-                $pm = $item->payment_method_id
-                    ? PaymentMethod::find($item->payment_method_id)
-                    : null;
+            ->keyBy('id');
 
-                return [
-                    'method' => $pm?->name ?? 'Tanpa Metode',
-                    'type' => $pm?->type ?? '-',
-                    'count' => $item->transaction_count,
-                    'revenue' => $item->total_revenue,
-                    'avg' => $item->avg_transaction,
-                ];
-            });
+        $paymentMethods = $paymentMethodRows->map(function ($item) use ($paymentMethods) {
+            $pm = $item->payment_method_id
+                ? $paymentMethods->get($item->payment_method_id)
+                : null;
 
-        $orderTypes = Transaction::whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            return [
+                'method' => $pm?->name ?? 'Tanpa Metode',
+                'type' => $pm?->type ?? '-',
+                'count' => $item->transaction_count,
+                'revenue' => $item->total_revenue,
+                'avg' => $item->avg_transaction,
+            ];
+        });
+
+        $orderTypes = Transaction::whereBetween('created_at', $range)
             ->selectRaw('
                 order_type,
                 COUNT(*) as transaction_count,
@@ -101,7 +116,8 @@ class ReportExport implements WithMultipleSheets
             ->join('products', 'transaction_details.product_id', '=', 'products.id')
             ->join('categories', 'products.category_id', '=', 'categories.id')
             ->join('transactions', 'transaction_details.transaction_id', '=', 'transactions.id')
-            ->whereBetween(DB::raw('DATE(transactions.created_at)'), [$startDate, $endDate])
+            ->where('transactions.tenant_id', tenant_id())
+            ->whereBetween('transactions.created_at', $range)
             ->selectRaw('
                 categories.name as category_name,
                 SUM(transaction_details.quantity) as total_qty,
@@ -117,7 +133,8 @@ class ReportExport implements WithMultipleSheets
             ->join('products', 'transaction_details.product_id', '=', 'products.id')
             ->join('categories', 'products.category_id', '=', 'categories.id')
             ->join('transactions', 'transaction_details.transaction_id', '=', 'transactions.id')
-            ->whereBetween(DB::raw('DATE(transactions.created_at)'), [$startDate, $endDate])
+            ->where('transactions.tenant_id', tenant_id())
+            ->whereBetween('transactions.created_at', $range)
             ->selectRaw('
                 products.name,
                 categories.name as category_name,
@@ -139,27 +156,28 @@ class ReportExport implements WithMultipleSheets
                 transactions.status
             ')
             ->join('transactions', 'transaction_details.transaction_id', '=', 'transactions.id')
-            ->whereBetween(DB::raw('DATE(transactions.created_at)'), [$startDate, $endDate])
+            ->where('transaction_details.tenant_id', tenant_id())
+            ->whereBetween('transactions.created_at', $range)
             ->orderBy('transactions.created_at', 'desc')
             ->get();
 
         $transactions = Transaction::with(['details', 'user', 'customer', 'paymentMethod'])
             ->withCount('details as items_count')
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->whereBetween('created_at', $range)
             ->latest()
             ->get();
 
         $shiftReports = Shift::with('user')
             ->withCount('transactions')
             ->withSum('transactions', 'total_amount')
-            ->where(function ($q) use ($startDate, $endDate) {
-                $q->whereBetween(DB::raw('DATE(start_time)'), [$startDate, $endDate])
-                    ->orWhereBetween(DB::raw('DATE(end_time)'), [$startDate, $endDate]);
+            ->where(function ($q) use ($range) {
+                $q->whereBetween('start_time', $range)
+                    ->orWhereBetween('end_time', $range);
             })
             ->orderBy('start_time', 'desc')
             ->get();
 
-        $customers = Transaction::whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+        $customerRows = Transaction::whereBetween('created_at', $range)
             ->whereNotNull('customer_id')
             ->selectRaw('
                 customer_id,
@@ -169,9 +187,15 @@ class ReportExport implements WithMultipleSheets
                 COALESCE(MAX(total_amount), 0) as max_transaction
             ')
             ->groupBy('customer_id')
+            ->get();
+
+        $customersById = Customer::whereIn('id', $customerRows->pluck('customer_id'))
             ->get()
-            ->map(function ($item) {
-                $customer = Customer::find($item->customer_id);
+            ->keyBy('id');
+
+        $customers = $customerRows
+            ->map(function ($item) use ($customersById) {
+                $customer = $customersById->get($item->customer_id);
 
                 return [
                     'name' => $customer?->name ?? 'Dihapus',
@@ -189,7 +213,8 @@ class ReportExport implements WithMultipleSheets
 
         $marketplaceOrders = Order::marketplace()
             ->whereIn('status', ['delivered', 'completed'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->tenantScoped()
+            ->whereBetween('created_at', $range)
             ->with('items')
             ->latest()
             ->limit(100)
@@ -209,7 +234,8 @@ class ReportExport implements WithMultipleSheets
 
         $marketplaceSummary = Order::marketplace()
             ->whereIn('status', ['delivered', 'completed'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->tenantScoped()
+            ->whereBetween('created_at', $range)
             ->selectRaw('
                 COUNT(*) as total_orders,
                 COALESCE(SUM(total), 0) as total_revenue,
@@ -220,7 +246,8 @@ class ReportExport implements WithMultipleSheets
 
         $ppobOrders = Order::ppob()
             ->where('status', 'success')
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->tenantScoped()
+            ->whereBetween('created_at', $range)
             ->latest()
             ->limit(100)
             ->get()
@@ -237,7 +264,8 @@ class ReportExport implements WithMultipleSheets
 
         $ppobSummary = Order::ppob()
             ->where('status', 'success')
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->tenantScoped()
+            ->whereBetween('created_at', $range)
             ->selectRaw('
                 COUNT(*) as total_orders,
                 COALESCE(SUM(total), 0) as total_revenue,

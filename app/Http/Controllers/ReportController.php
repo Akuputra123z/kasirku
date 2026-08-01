@@ -16,9 +16,17 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
+    protected function dateRange(string $startDate, string $endDate): array
+    {
+        return [
+            Carbon::parse($startDate)->startOfDay(),
+            Carbon::parse($endDate)->endOfDay(),
+        ];
+    }
+
     protected function getPosSummary($startDate, $endDate)
     {
-        return Transaction::whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+        return Transaction::whereBetween('created_at', $this->dateRange($startDate, $endDate))
             ->selectRaw('
                 COUNT(*) as total_transactions,
                 COALESCE(SUM(subtotal_amount), 0) as total_subtotal,
@@ -34,7 +42,7 @@ class ReportController extends Controller
 
     protected function getPosDaily($startDate, $endDate)
     {
-        return Transaction::whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+        return Transaction::whereBetween('created_at', $this->dateRange($startDate, $endDate))
             ->selectRaw('
                 DATE(created_at) as date,
                 COUNT(*) as transactions_count,
@@ -54,7 +62,8 @@ class ReportController extends Controller
         return DB::table('transaction_details')
             ->join('products', 'transaction_details.product_id', '=', 'products.id')
             ->join('transactions', 'transaction_details.transaction_id', '=', 'transactions.id')
-            ->whereBetween(DB::raw('DATE(transactions.created_at)'), [$startDate, $endDate])
+            ->where('transactions.tenant_id', tenant_id())
+            ->whereBetween('transactions.created_at', $this->dateRange($startDate, $endDate))
             ->selectRaw('
                 products.name,
                 SUM(transaction_details.quantity) as total_qty,
@@ -70,7 +79,8 @@ class ReportController extends Controller
     {
         return Order::marketplace()
             ->whereIn('status', ['delivered', 'completed'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->tenantScoped()
+            ->whereBetween('created_at', $this->dateRange($startDate, $endDate))
             ->selectRaw('
                 COUNT(*) as total_orders,
                 COALESCE(SUM(total), 0) as total_revenue,
@@ -84,7 +94,8 @@ class ReportController extends Controller
     {
         return Order::marketplace()
             ->whereIn('status', ['delivered', 'completed'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->tenantScoped()
+            ->whereBetween('created_at', $this->dateRange($startDate, $endDate))
             ->selectRaw('
                 DATE(created_at) as date,
                 COUNT(*) as transactions_count,
@@ -103,7 +114,8 @@ class ReportController extends Controller
             ->join('orders', 'order_items.order_id', '=', 'orders.id')
             ->where('orders.type', 'marketplace')
             ->whereIn('orders.status', ['delivered', 'completed'])
-            ->whereBetween(DB::raw('DATE(orders.created_at)'), [$startDate, $endDate])
+            ->where('orders.tenant_id', tenant_id())
+            ->whereBetween('orders.created_at', $this->dateRange($startDate, $endDate))
             ->selectRaw('
                 order_items.product_name as name,
                 SUM(order_items.quantity) as total_qty,
@@ -177,7 +189,8 @@ class ReportController extends Controller
     {
         return Order::ppob()
             ->where('status', 'success')
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->tenantScoped()
+            ->whereBetween('created_at', $this->dateRange($startDate, $endDate))
             ->selectRaw('
                 COUNT(*) as total_orders,
                 COALESCE(SUM(total), 0) as total_revenue,
@@ -190,7 +203,8 @@ class ReportController extends Controller
     {
         return Order::ppob()
             ->where('status', 'success')
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->tenantScoped()
+            ->whereBetween('created_at', $this->dateRange($startDate, $endDate))
             ->selectRaw('
                 DATE(created_at) as date,
                 COUNT(*) as transactions_count,
@@ -206,7 +220,8 @@ class ReportController extends Controller
     {
         return Order::marketplace()
             ->with(['items', 'user'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->tenantScoped()
+            ->whereBetween('created_at', $this->dateRange($startDate, $endDate))
             ->latest()
             ->limit(50)
             ->get()
@@ -230,7 +245,8 @@ class ReportController extends Controller
     {
         return Order::ppob()
             ->with(['user'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->tenantScoped()
+            ->whereBetween('created_at', $this->dateRange($startDate, $endDate))
             ->latest()
             ->limit(50)
             ->get()
@@ -256,26 +272,26 @@ class ReportController extends Controller
         $prevMonthStart = $currentMonthStart->copy()->subMonth()->startOfMonth();
         $prevMonthEnd = $currentMonthEnd->copy()->subMonth()->endOfMonth();
 
-        $currentPos = Transaction::whereBetween(DB::raw('DATE(created_at)'), [$currentMonthStart->toDateString(), $currentMonthEnd->toDateString()])
+        $currentPos = Transaction::whereBetween('created_at', $this->dateRange($currentMonthStart->toDateString(), $currentMonthEnd->toDateString()))
             ->sum('total_amount');
 
-        $prevPos = Transaction::whereBetween(DB::raw('DATE(created_at)'), [$prevMonthStart->toDateString(), $prevMonthEnd->toDateString()])
+        $prevPos = Transaction::whereBetween('created_at', $this->dateRange($prevMonthStart->toDateString(), $prevMonthEnd->toDateString()))
             ->sum('total_amount');
 
-        $currentMarket = Order::marketplace()->whereIn('status', ['delivered', 'completed'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$currentMonthStart->toDateString(), $currentMonthEnd->toDateString()])
+        $currentMarket = Order::marketplace()->whereIn('status', ['delivered', 'completed'])->tenantScoped()
+            ->whereBetween('created_at', $this->dateRange($currentMonthStart->toDateString(), $currentMonthEnd->toDateString()))
             ->sum('total');
 
-        $prevMarket = Order::marketplace()->whereIn('status', ['delivered', 'completed'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$prevMonthStart->toDateString(), $prevMonthEnd->toDateString()])
+        $prevMarket = Order::marketplace()->whereIn('status', ['delivered', 'completed'])->tenantScoped()
+            ->whereBetween('created_at', $this->dateRange($prevMonthStart->toDateString(), $prevMonthEnd->toDateString()))
             ->sum('total');
 
-        $currentPpob = Order::ppob()->where('status', 'success')
-            ->whereBetween(DB::raw('DATE(created_at)'), [$currentMonthStart->toDateString(), $currentMonthEnd->toDateString()])
+        $currentPpob = Order::ppob()->where('status', 'success')->tenantScoped()
+            ->whereBetween('created_at', $this->dateRange($currentMonthStart->toDateString(), $currentMonthEnd->toDateString()))
             ->sum('total');
 
-        $prevPpob = Order::ppob()->where('status', 'success')
-            ->whereBetween(DB::raw('DATE(created_at)'), [$prevMonthStart->toDateString(), $prevMonthEnd->toDateString()])
+        $prevPpob = Order::ppob()->where('status', 'success')->tenantScoped()
+            ->whereBetween('created_at', $this->dateRange($prevMonthStart->toDateString(), $prevMonthEnd->toDateString()))
             ->sum('total');
 
         $currentTotal = $currentPos + $currentMarket;
@@ -306,16 +322,17 @@ class ReportController extends Controller
         $topProducts = $this->getPosTopProducts($startDate, $endDate);
 
         $transactions = Transaction::with(['details.product', 'user'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->whereBetween('created_at', $this->dateRange($startDate, $endDate))
             ->latest()
-            ->get();
+            ->paginate(50)
+            ->items();
 
         $shiftReports = Shift::with('user')
             ->withCount('transactions')
             ->withSum('transactions', 'total_amount')
             ->where(function ($q) use ($startDate, $endDate) {
-                $q->whereBetween(DB::raw('DATE(start_time)'), [$startDate, $endDate])
-                    ->orWhereBetween(DB::raw('DATE(end_time)'), [$startDate, $endDate]);
+                $q->whereBetween('start_time', $this->dateRange($startDate, $endDate))
+                    ->orWhereBetween('end_time', $this->dateRange($startDate, $endDate));
             })
             ->orderBy('start_time', 'desc')
             ->get()
@@ -418,7 +435,7 @@ class ReportController extends Controller
         $topProducts = $this->getPosTopProducts($startDate, $endDate);
 
         $transactions = Transaction::with(['details.product', 'user'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate])
+            ->whereBetween('created_at', $this->dateRange($startDate, $endDate))
             ->latest()
             ->limit(500)
             ->get();

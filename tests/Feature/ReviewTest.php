@@ -41,7 +41,8 @@ test('customer cannot review non-completed order', function () {
 
     $this->actingAs($this->user)
         ->get(route('marketplace.reviews.create', $this->order))
-        ->assertForbidden();
+        ->assertRedirect(route('marketplace.orders.show', $this->order))
+        ->assertSessionHas('error');
 });
 
 test('customer cannot review order twice', function () {
@@ -49,7 +50,8 @@ test('customer cannot review order twice', function () {
 
     $this->actingAs($this->user)
         ->get(route('marketplace.reviews.create', $this->order))
-        ->assertForbidden();
+        ->assertRedirect(route('marketplace.orders.show', $this->order))
+        ->assertSessionHas('error');
 });
 
 test('customer cannot review another user order', function () {
@@ -108,7 +110,8 @@ test('customer cannot submit review for non-completed order', function () {
         ->post(route('marketplace.reviews.store', $this->order), [
             'rating' => 3,
         ])
-        ->assertForbidden();
+        ->assertRedirect(route('marketplace.orders.show', $this->order))
+        ->assertSessionHas('error');
 });
 
 // ─── Tenant: View Reviews ─────────────────────────────────────────────────

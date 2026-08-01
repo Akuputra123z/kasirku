@@ -2,13 +2,30 @@
 
 namespace App\Services;
 
+use App\Models\AppSetting;
 use App\Models\Tenant;
 use Illuminate\Support\Facades\Cache;
 
 class SubscriptionService
 {
+    /**
+     * Fitur langganan aktif/nonaktif global.
+     * Override runtime dari AppSetting, fallback ke config (.env).
+     */
+    public function isEnabled(): bool
+    {
+        return filter_var(
+            AppSetting::get('subscription_enabled', config('subscription.enabled')),
+            FILTER_VALIDATE_BOOL
+        );
+    }
+
     public function isPremium(Tenant $tenant): bool
     {
+        if (! $this->isEnabled()) {
+            return true;
+        }
+
         return Cache::remember(
             "tenant.{$tenant->id}.is_premium",
             3600,

@@ -24,11 +24,12 @@ class DashboardController extends Controller
             $totalOrders = Transaction::where('created_at', '>=', $now->copy()->startOfMonth())
                 ->count();
 
-            $lastMonthEarnings = Transaction::whereMonth('created_at', $now->copy()->subMonth()->month)
-                ->whereYear('created_at', $now->copy()->subMonth()->year)
+            $lastMonthRange = [$now->copy()->subMonth()->startOfMonth(), $now->copy()->subMonth()->endOfMonth()];
+            $thisMonthRange = [$now->copy()->startOfMonth(), $now->copy()->endOfMonth()];
+
+            $lastMonthEarnings = Transaction::whereBetween('created_at', $lastMonthRange)
                 ->sum('total_amount');
-            $thisMonthEarnings = Transaction::whereMonth('created_at', $now->month)
-                ->whereYear('created_at', $now->year)
+            $thisMonthEarnings = Transaction::whereBetween('created_at', $thisMonthRange)
                 ->sum('total_amount');
             $earningsGrowth = $lastMonthEarnings > 0
                 ? round((($thisMonthEarnings - $lastMonthEarnings) / $lastMonthEarnings) * 100)
@@ -42,11 +43,9 @@ class DashboardController extends Controller
                 ? round((($weeklySales - $lastWeekSales) / $lastWeekSales) * 100)
                 : null;
 
-            $thisMonthSales = Transaction::whereMonth('created_at', $now->month)
-                ->whereYear('created_at', $now->year)
+            $thisMonthSales = Transaction::whereBetween('created_at', $thisMonthRange)
                 ->count();
-            $lastMonthSales = Transaction::whereMonth('created_at', $now->copy()->subMonth()->month)
-                ->whereYear('created_at', $now->copy()->subMonth()->year)
+            $lastMonthSales = Transaction::whereBetween('created_at', $lastMonthRange)
                 ->count();
             $salesGrowth = $lastMonthSales > 0
                 ? round((($thisMonthSales - $lastMonthSales) / $lastMonthSales) * 100)
@@ -63,18 +62,23 @@ class DashboardController extends Controller
                 ? round((($recentSix - $priorSix) / $priorSix) * 100)
                 : null;
 
+            $driver = DB::connection()->getDriverName();
+            $yearExpr = $driver === 'sqlite' ? "strftime('%Y', created_at)" : 'YEAR(created_at)';
+            $monthExpr = $driver === 'sqlite' ? "strftime('%m', created_at)" : 'MONTH(created_at)';
+
+            $monthlyRows = Transaction::where('created_at', '>=', $now->copy()->subMonths(12)->startOfMonth())
+                ->selectRaw("{$yearExpr} as year, {$monthExpr} as month, SUM(total_amount) as revenue, SUM(tax_amount) as tax, SUM(discount_amount) as discount")
+                ->groupBy(DB::raw("{$yearExpr}, {$monthExpr}"))
+                ->get()
+                ->keyBy(fn ($row) => "{$row->year}-".(int) $row->month);
+
             $monthlyChart = [];
             for ($i = 11; $i >= 0; $i--) {
                 $date = $now->copy()->subMonths($i);
-                $revenue = Transaction::whereMonth('created_at', $date->month)
-                    ->whereYear('created_at', $date->year)
-                    ->sum('total_amount');
-                $tax = Transaction::whereMonth('created_at', $date->month)
-                    ->whereYear('created_at', $date->year)
-                    ->sum('tax_amount');
-                $discount = Transaction::whereMonth('created_at', $date->month)
-                    ->whereYear('created_at', $date->year)
-                    ->sum('discount_amount');
+                $row = $monthlyRows->get("{$date->year}-{$date->month}");
+                $revenue = $row?->revenue ?? 0;
+                $tax = $row?->tax ?? 0;
+                $discount = $row?->discount ?? 0;
 
                 $monthlyChart[] = [
                     'month' => $date->format('M'),
@@ -94,9 +98,20 @@ class DashboardController extends Controller
                 ['category' => 'Discount', 'value' => round(($totalDiscount / $totalSubtotal) * 100), 'fill' => 'var(--color-chart-3)'],
             ];
 
+            $maxSales = DB::table('transaction_details')
+                ->selectRaw('MAX(sub.total) as max_total')
+                ->fromSub(
+                    DB::table('transaction_details')
+                        ->where('tenant_id', tenant_id())
+                        ->selectRaw('SUM(subtotal) as total')
+                        ->groupBy('product_id'),
+                    'sub'
+                )->value('max_total') ?: 1;
+
             $topProducts = DB::table('transaction_details')
                 ->join('products', 'transaction_details.product_id', '=', 'products.id')
                 ->join('categories', 'products.category_id', '=', 'categories.id')
+                ->where('transaction_details.tenant_id', tenant_id())
                 ->selectRaw('
                     products.name as product_name,
                     categories.name as category_name,
@@ -109,16 +124,7 @@ class DashboardController extends Controller
                 ->orderByDesc('total_sales')
                 ->limit(8)
                 ->get()
-                ->map(function ($p) {
-                    $maxSales = DB::table('transaction_details')
-                        ->selectRaw('MAX(sub.total) as max_total')
-                        ->fromSub(
-                            DB::table('transaction_details')
-                                ->selectRaw('SUM(subtotal) as total')
-                                ->groupBy('product_id'),
-                            'sub'
-                        )->value('max_total') ?: 1;
-
+                ->map(function ($p) use ($maxSales) {
                     return [
                         'product_name' => $p->product_name,
                         'category_name' => $p->category_name,
@@ -135,6 +141,7 @@ class DashboardController extends Controller
             $salesByCategory = DB::table('transaction_details')
                 ->join('products', 'transaction_details.product_id', '=', 'products.id')
                 ->join('categories', 'products.category_id', '=', 'categories.id')
+                ->where('transaction_details.tenant_id', tenant_id())
                 ->selectRaw('categories.name, SUM(transaction_details.subtotal) as total_sales, COUNT(DISTINCT transaction_details.transaction_id) as total_trx')
                 ->groupBy('categories.id', 'categories.name')
                 ->orderByDesc('total_sales')

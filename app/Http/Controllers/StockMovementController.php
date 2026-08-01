@@ -6,6 +6,7 @@ use App\Http\Requests\StoreStockMovementRequest;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StockMovement;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -37,11 +38,11 @@ class StockMovementController extends Controller
         }
 
         if ($dateFrom) {
-            $query->whereDate('created_at', '>=', $dateFrom);
+            $query->where('created_at', '>=', Carbon::parse($dateFrom)->startOfDay());
         }
 
         if ($dateTo) {
-            $query->whereDate('created_at', '<=', $dateTo);
+            $query->where('created_at', '<=', Carbon::parse($dateTo)->endOfDay());
         }
 
         $allowedSort = ['created_at', 'quantity', 'type', 'stock_before', 'stock_after'];
@@ -52,7 +53,7 @@ class StockMovementController extends Controller
 
         $movements = $query->orderBy($sortField, $sortDir)->paginate(15)->withQueryString();
 
-        $todayStats = StockMovement::whereDate('created_at', today())
+        $todayStats = StockMovement::whereBetween('created_at', [today()->startOfDay(), today()->endOfDay()])
             ->selectRaw("
                 SUM(CASE WHEN type = 'in' THEN quantity ELSE 0 END) as stock_in,
                 SUM(CASE WHEN type = 'out' THEN quantity ELSE 0 END) as stock_out,

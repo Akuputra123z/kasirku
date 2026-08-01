@@ -1,7 +1,8 @@
 'use client';
 
-import { Head } from '@inertiajs/react';
-import { Activity, ArrowUpRight, Building2, DollarSign, Store, TrendingUp, Users } from 'lucide-react';
+import { Head, router } from '@inertiajs/react';
+import { Activity, ArrowUpRight, Building2, Crown, DollarSign, Store, TrendingUp, Users } from 'lucide-react';
+import { toast } from 'sonner';
 import Heading from '@/components/heading';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -51,12 +52,40 @@ export default function AdminDashboard({
     monthlyGrowth,
     recentActivity,
     latestTenants,
+    subscriptionEnabled,
 }: {
     stats: { total: number; active: number; suspended: number; ppobRevenue: number; ppobThisMonth: number; ppobCount: number };
     monthlyGrowth: MonthlyGrowthPoint[];
     recentActivity: ActivityItem[];
     latestTenants: TenantItem[];
+    subscriptionEnabled: boolean;
 }) {
+    const toggleSubscription = () => {
+        const next = !subscriptionEnabled;
+
+        if (
+            !window.confirm(
+                next
+                    ? 'Aktifkan fitur langganan? Semua store akan kembali melihat menu Billing dan batasan paket.'
+                    : 'Nonaktifkan fitur langganan? Menu Billing disembunyikan dan semua store tampak Premium aktif.',
+            )
+        ) {
+            return;
+        }
+
+        router.post(
+            route('admin.subscription.toggle'),
+            { enabled: next },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                onSuccess: () =>
+                    toast.success(next ? 'Fitur langganan diaktifkan.' : 'Fitur langganan dinonaktifkan.'),
+                onError: () => toast.error('Gagal mengubah status langganan.'),
+            },
+        );
+    };
+
     const statCards: StatCard[] = [
         {
             title: 'Total Toko',
@@ -119,6 +148,30 @@ export default function AdminDashboard({
                     title="Platform Dashboard"
                     description="Overview of your multi-tenant platform"
                 />
+
+                <Card className="mt-6">
+                    <CardHeader className="flex flex-row items-center justify-between gap-4">
+                        <div>
+                            <CardTitle className="flex items-center gap-2">
+                                <Crown className="size-5 text-amber-500" />
+                                Fitur Langganan
+                            </CardTitle>
+                            <CardDescription className="mt-1">
+                                {subscriptionEnabled
+                                    ? 'Aktif — store melihat menu Billing, paket & batasan berlaku.'
+                                    : 'Nonaktif — menu Billing disembunyikan, semua store tampak Premium aktif.'}
+                            </CardDescription>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={toggleSubscription}
+                            className={`relative h-8 w-14 shrink-0 rounded-full transition-all ${subscriptionEnabled ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-700'}`}
+                            aria-label={subscriptionEnabled ? 'Nonaktifkan langganan' : 'Aktifkan langganan'}
+                        >
+                            <span className={`absolute top-1 left-1 size-6 rounded-full bg-white shadow-md transition-transform ${subscriptionEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                        </button>
+                    </CardHeader>
+                </Card>
 
                 <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
                     {statCards.map((card) => {

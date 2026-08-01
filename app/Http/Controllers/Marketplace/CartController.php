@@ -13,7 +13,7 @@ class CartController extends Controller
     public function index()
     {
         $cartItems = Cart::where('user_id', Auth::id())
-            ->with(['product' => fn ($q) => $q->withTrashed(), 'variant'])
+            ->with(['product' => fn ($q) => $q->withTrashed()->with('tenant:id,name,slug'), 'variant'])
             ->latest()
             ->get()
             ->map(fn ($c) => [

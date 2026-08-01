@@ -12,6 +12,11 @@ class ProductVariant extends Model
 
     protected $fillable = ['tenant_id', 'stock', 'sku', 'product_id', 'name', 'additional_price', 'weight'];
 
+    protected $attributes = [
+        'weight' => 0,
+        'stock' => 0,
+    ];
+
     protected $casts = [
         'additional_price' => 'float',
         'weight' => 'integer',

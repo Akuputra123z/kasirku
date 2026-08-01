@@ -1,12 +1,12 @@
 import { Head, router } from '@inertiajs/react';
 import { Check, Crown, CreditCard, Loader2, QrCode, Copy, CheckCheck, X, ArrowRight, Eye, Printer } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import Heading from '@/components/heading';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import Heading from '@/components/heading';
-import billing from '@/routes/billing';
 import { home } from '@/routes';
+import billing from '@/routes/billing';
 
 function formatPrice(amount: number): string {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(amount);
@@ -66,6 +66,7 @@ export default function Billing({
     subscriptions,
     pendingSubscription,
     pricing,
+    subscriptionEnabled,
 }: {
     isPremium: boolean;
     isTrial: boolean;
@@ -75,6 +76,7 @@ export default function Billing({
     subscriptions: Subscription[];
     pendingSubscription: { id: number; package: string; amount: number; payment_method: string | null; payment_payload: PaymentPayload | null } | null;
     pricing: { monthly: number; yearly: number };
+    subscriptionEnabled: boolean;
 }) {
     const [loading, setLoading] = useState<string | null>(null);
     const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
@@ -84,7 +86,9 @@ export default function Billing({
     const hasPendingPayment = pendingSubscription?.payment_method && pendingSubscription?.payment_payload;
 
     useEffect(() => {
-        if (!hasPendingPayment) return;
+        if (!hasPendingPayment) {
+return;
+}
 
         const interval = setInterval(() => router.reload(), 5000);
 
@@ -103,6 +107,7 @@ export default function Billing({
 
             if (!res.ok) {
                 router.reload();
+
                 return;
             }
 
@@ -113,7 +118,9 @@ export default function Billing({
     };
 
     const handleCharge = async () => {
-        if (!selectedMethod || !pendingSubscription) return;
+        if (!selectedMethod || !pendingSubscription) {
+return;
+}
 
         setLoading('charge');
 
@@ -126,6 +133,7 @@ export default function Billing({
 
             if (!res.ok) {
                 router.reload();
+
                 return;
             }
 
@@ -136,7 +144,9 @@ export default function Billing({
     };
 
     const handleCancel = async () => {
-        if (!pendingSubscription) return;
+        if (!pendingSubscription) {
+return;
+}
 
         setLoading('cancel');
 
@@ -167,7 +177,11 @@ export default function Billing({
         const title = s.package === 'yearly' ? 'Langganan Tahunan' : 'Langganan Bulanan';
 
         const win = window.open('', '_blank');
-        if (!win) return;
+
+        if (!win) {
+return;
+}
+
         win.document.write(`
             <html>
             <head><title>Invoice ${invoiceNumber(s)}</title>
@@ -238,23 +252,32 @@ export default function Billing({
                     </CardHeader>
                     <CardContent>
                         {isPremium ? (
-                            <div className="flex items-center gap-3">
-                                {isTrial ? (
-                                    <>
-                                        <span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-700">Trial</span>
-                                        <span className="text-sm text-muted-foreground">
-                                            Masa percobaan — aktif sampai {expiresAt} ({daysLeft} hari lagi). Lakukan pembayaran untuk memperpanjang.
-                                        </span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">Premium</span>
-                                        <span className="text-sm text-muted-foreground">
-                                            Aktif sampai {expiresAt} ({daysLeft} hari lagi)
-                                        </span>
-                                    </>
-                                )}
-                            </div>
+                            !subscriptionEnabled ? (
+                                <div className="flex items-center gap-3">
+                                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">Premium</span>
+                                    <span className="text-sm text-muted-foreground">
+                                        Langganan aktif — semua fitur terbuka untuk toko Anda.
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-3">
+                                    {isTrial ? (
+                                        <>
+                                            <span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-700">Trial</span>
+                                            <span className="text-sm text-muted-foreground">
+                                                Masa percobaan — aktif sampai {expiresAt} ({daysLeft} hari lagi). Lakukan pembayaran untuk memperpanjang.
+                                            </span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm font-semibold text-emerald-700">Premium</span>
+                                            <span className="text-sm text-muted-foreground">
+                                                Aktif sampai {expiresAt} ({daysLeft} hari lagi)
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+                            )
                         ) : (
                             <div className="flex items-center gap-3">
                                 <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-600">Gratis</span>
@@ -265,7 +288,7 @@ export default function Billing({
                 </Card>
 
                 {/* Payment Instructions */}
-                {hasPendingPayment && pendingSubscription && (
+                {subscriptionEnabled && hasPendingPayment && pendingSubscription && (
                     <Card className="mt-4 border-emerald-200">
                         <CardHeader>
                             <CardTitle className="text-sm">Menunggu Pembayaran</CardTitle>
@@ -330,7 +353,7 @@ export default function Billing({
                 )}
 
                 {/* Payment Method Selector */}
-                {pendingSubscription && !hasPendingPayment && (
+                {subscriptionEnabled && pendingSubscription && !hasPendingPayment && (
                     <Card className="mt-4 border-amber-200">
                         <CardHeader>
                             <CardTitle className="text-sm">Pilih Metode Pembayaran</CardTitle>
@@ -396,7 +419,7 @@ export default function Billing({
                 )}
 
                 {/* Paket */}
-                {!pendingSubscription && (
+                {subscriptionEnabled && !pendingSubscription && (
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
                         <Card className={currentPackage === 'yearly' ? 'opacity-60' : 'border-emerald-200'}>
                             <CardHeader>
@@ -508,7 +531,11 @@ export default function Billing({
                 )}
 
                 {/* Invoice Detail Dialog */}
-                <Dialog open={!!selectedInvoice} onOpenChange={(open) => { if (!open) setSelectedInvoice(null); }}>
+                <Dialog open={!!selectedInvoice} onOpenChange={(open) => {
+ if (!open) {
+setSelectedInvoice(null);
+} 
+}}>
                     <DialogContent className="sm:max-w-lg">
                         {selectedInvoice && (
                             <InvoiceDetail

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Subscription;
 use App\Services\BillingService;
 use App\Services\MidtransService;
+use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -13,11 +14,32 @@ class BillingController extends Controller
     public function __construct(
         private BillingService $billing,
         private MidtransService $midtrans,
+        private SubscriptionService $subscription,
     ) {}
 
     public function index()
     {
         $tenant = tenant();
+
+        $subscriptionEnabled = $this->subscription->isEnabled();
+
+        if (! $subscriptionEnabled) {
+            return Inertia::render('settings/billing', [
+                'isPremium' => true,
+                'isTrial' => false,
+                'currentPackage' => null,
+                'expiresAt' => null,
+                'daysLeft' => 0,
+                'subscriptions' => [],
+                'pendingSubscription' => null,
+                'pricing' => [
+                    'monthly' => config('subscription.pricing.monthly'),
+                    'yearly' => config('subscription.pricing.yearly'),
+                ],
+                'clientKey' => config('midtrans.client_key'),
+                'subscriptionEnabled' => false,
+            ]);
+        }
 
         $now = now();
 
@@ -104,11 +126,16 @@ class BillingController extends Controller
                 'yearly' => config('subscription.pricing.yearly'),
             ],
             'clientKey' => config('midtrans.client_key'),
+            'subscriptionEnabled' => true,
         ]);
     }
 
     public function subscribe(Request $request)
     {
+        if (! $this->subscription->isEnabled()) {
+            return back()->with('error', 'Fitur langganan sedang dinonaktifkan.');
+        }
+
         $validated = $request->validate([
             'package' => 'required|in:monthly,yearly',
         ]);
@@ -134,6 +161,10 @@ class BillingController extends Controller
 
     public function charge(Request $request, Subscription $subscription)
     {
+        if (! $this->subscription->isEnabled()) {
+            return back()->with('error', 'Fitur langganan sedang dinonaktifkan.');
+        }
+
         $tenant = tenant();
 
         if (! $tenant || $subscription->tenant_id !== $tenant->id) {
@@ -159,6 +190,10 @@ class BillingController extends Controller
 
     public function cancel(Subscription $subscription)
     {
+        if (! $this->subscription->isEnabled()) {
+            return back()->with('error', 'Fitur langganan sedang dinonaktifkan.');
+        }
+
         $tenant = tenant();
 
         if (! $tenant || $subscription->tenant_id !== $tenant->id) {

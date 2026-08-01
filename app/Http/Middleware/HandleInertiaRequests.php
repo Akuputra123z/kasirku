@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Cart;
 use App\Models\MarketplaceCategory;
+use App\Services\SubscriptionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -25,6 +26,8 @@ class HandleInertiaRequests extends Middleware
             null,
             report: fn ($e) => Log::warning('Failed to resolve tenant: '.$e->getMessage()),
         );
+
+        $subscriptionEnabled = app(SubscriptionService::class)->isEnabled();
 
         $sessionAvailable = $request->hasSession();
 
@@ -77,7 +80,9 @@ class HandleInertiaRequests extends Middleware
                 'logo' => $currentTenant->logo ?? null,
                 'logo_url' => $currentTenant->logo ? Storage::disk('public')->url($currentTenant->logo) : null,
                 'color_theme' => $currentTenant->color_theme ?? 'default',
-                'subscription_tier' => $currentTenant->subscription_tier ?? 'free',
+                'subscription_tier' => $subscriptionEnabled
+                    ? ($currentTenant->subscription_tier ?? 'free')
+                    : 'premium',
                 'subscription_expires_at' => $currentTenant->subscription_expires_at?->format('d M Y'),
                 'points_per_currency' => (int) ($currentTenant->settings['points_per_currency'] ?? 10000),
                 'point_value' => (int) ($currentTenant->settings['point_value'] ?? 100),
@@ -94,6 +99,7 @@ class HandleInertiaRequests extends Middleware
             ),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'centralAdmin' => $sessionAvailable && $request->session()->get('central_admin_id') !== null,
+            'subscriptionEnabled' => $subscriptionEnabled,
         ];
     }
 }

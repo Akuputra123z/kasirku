@@ -45,7 +45,7 @@ class PrintReceiptJob implements ShouldQueue
      */
     public function handle(): void
     {
-        // 1. Initialize Tenancy Context
+        // 1. Set tenant context (single database, scoped by tenant_id)
         if ($this->tenantId) {
             $tenant = Tenant::find($this->tenantId);
             if ($tenant) {

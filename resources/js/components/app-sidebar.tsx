@@ -1,5 +1,4 @@
 import { Link, usePage } from '@inertiajs/react';
-import { route } from 'ziggy-js';
 import {
     ArrowLeftRight,
     ArrowUpDown,
@@ -24,6 +23,7 @@ import {
     UserRound,
     Users,
 } from 'lucide-react';
+import { route } from 'ziggy-js';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -38,11 +38,11 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { marketplaceCategories } from '@/routes';
 import admin from '@/routes/admin';
 import billing from '@/routes/billing';
 import brands from '@/routes/brands';
 import categories from '@/routes/categories';
-import { marketplaceCategories } from '@/routes';
 import customers from '@/routes/customers';
 import onlineOrders from '@/routes/online-orders';
 import paymentMethods from '@/routes/payment-methods';
@@ -59,12 +59,12 @@ import users from '@/routes/users';
 import vouchers from '@/routes/vouchers';
 import type { NavItem } from '@/types';
 
-type NavItemDef = NavItem & { permission?: string; subscription?: 'premium' };
+type NavItemDef = NavItem & { permission?: string; subscription?: 'premium'; requiresSubscription?: boolean };
 
 export function AppSidebar() {
-    const { tenant, auth, centralAdmin } = usePage().props;
+    const { tenant, auth, centralAdmin, subscriptionEnabled } = usePage().props;
     const isTenant = !!tenant;
-    const isSuperAdmin = auth.permissions.includes('manage-tenants');
+    const isSuperAdmin = auth.roles.includes('super-admin');
     const homeUrl =
         isSuperAdmin && !isTenant ? admin.tenants().url : dashboard().url;
 
@@ -202,6 +202,7 @@ export function AppSidebar() {
             icon: Crown,
             group: 'Billing',
             hideGroupLabel: true,
+            requiresSubscription: true,
         },
         {
             title: 'Pengguna',
@@ -275,7 +276,14 @@ export function AppSidebar() {
 
         return auth.permissions.includes(item.permission);
     }).filter((item) => {
-        if (!item.subscription) return true;
+        if (item.requiresSubscription && !subscriptionEnabled) {
+            return false;
+        }
+
+        if (!item.subscription) {
+return true;
+}
+
         return tenant?.subscription_tier === item.subscription;
     });
 

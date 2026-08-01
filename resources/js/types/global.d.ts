@@ -17,6 +17,7 @@ declare module '@inertiajs/core' {
             tenant: Tenant | null;
             sidebarOpen: boolean;
             centralAdmin: boolean;
+            subscriptionEnabled: boolean;
             [key: string]: unknown;
         };
     }

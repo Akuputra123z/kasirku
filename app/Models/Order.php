@@ -84,6 +84,15 @@ class Order extends Model
         return $query->where('type', 'marketplace');
     }
 
+    public function scopeTenantScoped($query)
+    {
+        if ($tenantId = tenant_id()) {
+            return $query->where('orders.tenant_id', $tenantId);
+        }
+
+        return $query;
+    }
+
     public function isPpob(): bool
     {
         return $this->type === 'ppob';

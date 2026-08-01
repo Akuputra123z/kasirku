@@ -191,8 +191,8 @@ class TransactionController extends Controller
                     if ($request->customer_id) {
                         $customer = Customer::findOrFail($request->customer_id);
                         $customer->vouchers()->attach($voucher->id, [
-                            'transaction_id' => $transaction->id,
-                            'used_at' => now(),
+                            'tenant_id' => tenant_id(),
+                            'redeemed_at' => now(),
                         ]);
                     }
                 }

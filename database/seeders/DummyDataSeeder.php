@@ -244,6 +244,7 @@ class DummyDataSeeder extends Seeder
                     'online_price' => $data['online_price'],
                     'stock_online' => $data['stock_online'],
                     'weight' => $data['weight'],
+                    'image' => $data['image'],
                     'sku' => 'SKU-'.$data['tenant_id'].'-'.$data['seq'],
                     'barcode' => fake()->ean13(),
                 ]);
@@ -381,6 +382,7 @@ class DummyDataSeeder extends Seeder
                     'online_price' => $visible ? (int) round($basePrice * rand(95, 115) / 100) : null,
                     'stock_online' => $visible ? rand(5, 100) : null,
                     'weight' => rand(50, 5000),
+                    'image' => 'https://picsum.photos/seed/product-'.$globalSeq.'/600/600',
                     'seq' => $globalSeq,
                 ];
             }

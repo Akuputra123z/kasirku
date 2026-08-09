@@ -5,7 +5,12 @@ return [
     'secret_key' => env('DIGIFLAZZ_SECRET_KEY'),
     'is_development' => env('DIGIFLAZZ_DEVELOPMENT', true),
 
-    'base_url' => 'https://api.digiflazz.com',
+    'production' => [
+        'username' => env('DIGIFLAZZ_USERNAME_PRODUCTION', env('DIGIFLAZZ_USERNAME')),
+        'secret_key' => env('DIGIFLAZZ_SECRET_KEY_PRODUCTION', env('DIGIFLAZZ_SECRET_KEY')),
+    ],
+
+    'base_url' => env('DIGIFLAZZ_BASE_URL', 'https://api.digiflazz.com'),
 
     'markup' => [
         'Pulsa' => ['type' => 'percentage', 'value' => 2],

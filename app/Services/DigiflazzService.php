@@ -16,9 +16,20 @@ class DigiflazzService
 
     public function __construct()
     {
-        $this->username = config('digiflazz.username');
-        $this->secretKey = config('digiflazz.secret_key');
-        $this->baseUrl = config('digiflazz.base_url');
+        if (config('digiflazz.is_development')) {
+            $this->username = config('digiflazz.username');
+            $this->secretKey = config('digiflazz.secret_key');
+        } else {
+            $this->username = config('digiflazz.production.username') ?? config('digiflazz.username');
+            $this->secretKey = config('digiflazz.production.secret_key') ?? config('digiflazz.secret_key');
+        }
+        $this->baseUrl = rtrim((string) config('digiflazz.base_url'), '/');
+
+        Log::info('Digiflazz service initialized', [
+            'mode' => config('digiflazz.is_development') ? 'development' : 'production',
+            'base_url' => $this->baseUrl,
+            'username' => $this->username,
+        ]);
     }
 
     public function getPriceList(): ?array

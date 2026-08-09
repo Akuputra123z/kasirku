@@ -155,6 +155,10 @@ class Product extends Model
             return null;
         }
 
+        if (str_starts_with($this->image, 'http://') || str_starts_with($this->image, 'https://')) {
+            return $this->image;
+        }
+
         return '/storage/'.$this->image;
     }
 }

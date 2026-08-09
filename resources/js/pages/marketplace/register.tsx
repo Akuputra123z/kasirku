@@ -1,19 +1,20 @@
 'use client';
 
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Head, Link, router } from '@inertiajs/react';
 import { ArrowLeft, Check, User, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { customerRegisterSchema, type CustomerRegister } from '@/lib/schemas';
 import InputError from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { customerRegisterSchema  } from '@/lib/schemas';
+import type {CustomerRegister} from '@/lib/schemas';
 
 export default function MarketplaceRegister({ redirect }: { redirect?: string }) {
-    const { register, handleSubmit, watch, formState: { errors, isSubmitting } } = useForm<CustomerRegister>({
+    const { register, handleSubmit, watch, formState: { errors, isSubmitting }, setError } = useForm<CustomerRegister>({
         resolver: zodResolver(customerRegisterSchema),
         defaultValues: { name: '', email: '', phone: '', password: '', password_confirmation: '', redirect: redirect || '' },
     });
@@ -25,7 +26,15 @@ export default function MarketplaceRegister({ redirect }: { redirect?: string })
 
     function onSubmit(data: CustomerRegister) {
         router.post('/customer/register', data, {
-            onError: (err) => {},
+            onError: (err) => {
+                for (const [key, msgs] of Object.entries(err)) {
+                    setError(key as keyof CustomerRegister, { message: Array.isArray(msgs) ? msgs[0] : String(msgs) });
+                }
+
+                if (Object.keys(err).length === 0 && !errors.root) {
+                    setError('root', { message: 'Terjadi kesalahan. Silakan coba lagi.' });
+                }
+            },
         });
     }
 
@@ -43,6 +52,7 @@ export default function MarketplaceRegister({ redirect }: { redirect?: string })
             </Link>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <input type="hidden" {...register('redirect')} />
                 <div className="space-y-1">
                     <Label htmlFor="name" className="text-[13px] font-semibold text-[#191c1d]">
                         Nama Lengkap

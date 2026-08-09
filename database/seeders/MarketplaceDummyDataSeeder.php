@@ -221,6 +221,7 @@ class MarketplaceDummyDataSeeder extends Seeder
                     'online_price' => $basePrice,
                     'stock_online' => rand(5, 150),
                     'weight' => rand(50, 5000),
+                    'image' => 'https://picsum.photos/seed/marketplace-'.$tenant->id.'-'.$p.'/600/600',
                     'sku' => 'MP-'.$tenant->id.'-'.str_pad((string) $p, 3, '0', STR_PAD_LEFT),
                     'barcode' => fake()->ean13(),
                 ]);

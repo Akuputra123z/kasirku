@@ -283,8 +283,14 @@ export function AppSidebar() {
         }
 
         if (!item.subscription) {
-return true;
-}
+            return true;
+        }
+
+        // Mode langganan nonaktif: semua menu premium ditampilkan untuk
+        // semua user (menu Billing tetap disembunyikan di atas).
+        if (!subscriptionEnabled) {
+            return true;
+        }
 
         return tenant?.subscription_tier === item.subscription;
     });

@@ -23,6 +23,7 @@ import {
 
 interface ImportResult {
     imported: number;
+    updated?: number;
     errors: string[];
 }
 
@@ -131,13 +132,22 @@ export function ImportDialog({
                 if (importResult) {
                     setResult(importResult);
 
-                    if (Number(importResult.errors?.length ?? 0) === 0) {
+                    const updated = Number(importResult.updated ?? 0);
+                    const failed = Number(importResult.errors?.length ?? 0);
+
+                    if (failed === 0) {
                         toast.success(
-                            `${importResult.imported} data berhasil diimport.`,
+                            `${
+                                importResult.imported
+                            } data baru berhasil diimport${
+                                updated > 0 ? `, ${updated} data diperbarui` : ''
+                            }.`,
                         );
                     } else {
                         toast.warning(
-                            `${importResult.imported} berhasil, ${importResult.errors.length} gagal.`,
+                            `${importResult.imported} ditambahkan${
+                                updated > 0 ? `, ${updated} diperbarui` : ''
+                            }, ${failed} gagal.`,
                         );
                     }
                 } else {
@@ -186,7 +196,10 @@ export function ImportDialog({
                             <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />
                             <div>
                                 <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                                    {result.imported} data berhasil diimport
+                                    {result.imported} data baru berhasil diimport
+                                    {Number(result.updated ?? 0) > 0
+                                        ? `, ${result.updated} data diperbarui`
+                                        : ''}
                                 </p>
                             </div>
                         </div>

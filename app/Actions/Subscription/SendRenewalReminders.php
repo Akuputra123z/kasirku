@@ -4,12 +4,18 @@ namespace App\Actions\Subscription;
 
 use App\Events\SubscriptionExpiring;
 use App\Models\Tenant;
+use App\Services\SubscriptionService;
 use Illuminate\Support\Facades\Cache;
 
 class SendRenewalReminders
 {
     public function __invoke(): void
     {
+        // Mode nonaktif: tidak ada email reminder langganan.
+        if (! app(SubscriptionService::class)->isEnabled()) {
+            return;
+        }
+
         foreach ([7, 3, 1] as $days) {
             Tenant::where('subscription_tier', 'premium')
                 ->where('subscription_status', 'active')

@@ -41,13 +41,14 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import customers from '@/routes/customers';
 
+
 interface Customer {
     id: number;
     name: string;
     email: string | null;
     phone: string | null;
     address: string | null;
-    loyalty_points: number;
+    loyalty_points?: number | null;
     created_at: string;
     transactions_count?: number;
 }
@@ -446,7 +447,7 @@ export default function CustomersIndex() {
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="py-3 text-right font-bold">
-                                                    {c.loyalty_points.toLocaleString()}
+                                                   {Number(c.loyalty_points ?? 0).toLocaleString('id-ID')}
                                                 </TableCell>
                                                 <TableCell className="py-3 pr-6 text-right">
                                                     <div className="flex items-center justify-end gap-1">

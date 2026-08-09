@@ -1,7 +1,9 @@
 <?php
 
 return [
-    'enabled' => (bool) env('SUBSCRIPTION_ENABLED', true),
+    // filter_var agar nilai dari .env seperti 'false', '0', '1' diparse dengan
+    // benar (cast (bool) sebelumnya membuat string 'false' menjadi true).
+    'enabled' => filter_var(env('SUBSCRIPTION_ENABLED', true), FILTER_VALIDATE_BOOL),
 
     'limits' => [
         'products' => (int) env('SUBSCRIPTION_LIMIT_PRODUCTS', 50),

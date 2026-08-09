@@ -103,9 +103,9 @@ export default function StorePage({ store, products, categories, filters }: { st
 
                     <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
                         {products.data?.map((product: ProductItem) => (
-                            <Card key={product.id} className="h-full transition-shadow hover:shadow-md">
-                                <CardContent className="p-4">
-                                    <Link href={`/store/${store.slug}/products/${product.slug}`}>
+                            <Card key={product.id} className="flex h-full flex-col transition-shadow hover:shadow-md">
+                                <CardContent className="flex flex-1 flex-col p-4">
+                                    <Link href={`/store/${store.slug}/products/${product.slug}`} className="flex flex-1 flex-col">
                                         <div className="aspect-square overflow-hidden rounded-lg bg-gray-100">
                                             {product.image_url ? (
                                                 <img src={product.image_url} alt={product.name} className="size-full object-cover" />
@@ -113,10 +113,10 @@ export default function StorePage({ store, products, categories, filters }: { st
                                                 <div className="flex size-full items-center justify-center text-gray-300"><Package className="size-12" /></div>
                                             )}
                                         </div>
-                                        <h3 className="mt-2 text-sm font-medium text-gray-900 line-clamp-2">{product.name}</h3>
+                                        <h3 className="mt-2 min-h-[2.625rem] text-sm font-medium text-gray-900 line-clamp-2">{product.name}</h3>
                                         <p className="mt-1 font-semibold text-[#4648d4]">{formatPrice(product.display_price)}</p>
                                     </Link>
-                                    <Button size="sm" className="mt-2 w-full bg-[#fea619] text-[#684000] hover:bg-[#ffb95f]" onClick={() => addToCart(product.id)}>
+                                    <Button size="sm" className="mt-3 w-full bg-[#fea619] text-[#684000] hover:bg-[#ffb95f]" onClick={() => addToCart(product.id)}>
                                         + Keranjang
                                     </Button>
                                 </CardContent>

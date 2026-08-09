@@ -73,6 +73,7 @@ class BrandController extends Controller
         ]);
 
         $imported = 0;
+        $updated = 0;
         $errors = [];
         $rowNumber = 0;
 
@@ -86,6 +87,7 @@ class BrandController extends Controller
         if (empty($rows)) {
             return redirect()->back()->with('import', [
                 'imported' => 0,
+                'updated' => 0,
                 'errors' => ['File Excel kosong atau tidak valid.'],
             ]);
         }
@@ -110,7 +112,7 @@ class BrandController extends Controller
                 continue;
             }
 
-            if (Brand::withTrashed()->where('name', $rowData['name'])->exists()) {
+            if (Brand::withTrashed()->where('tenant_id', tenant_id())->where('name', $rowData['name'])->exists()) {
                 $errors[] = "Baris {$rowNumber}: Brand '{$rowData['name']}' sudah ada.";
 
                 continue;
@@ -124,7 +126,7 @@ class BrandController extends Controller
             $imported++;
         }
 
-        return redirect()->back()->with('import', compact('imported', 'errors'));
+        return redirect()->back()->with('import', compact('imported', 'updated', 'errors'));
     }
 
     public function downloadTemplate(): BinaryFileResponse

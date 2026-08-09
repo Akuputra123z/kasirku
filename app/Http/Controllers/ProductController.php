@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\ProductExport;
 use App\Exports\ProductTemplateExport;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
@@ -9,6 +10,7 @@ use App\Models\Brand;
 use App\Models\Category;
 use App\Models\Product;
 use App\Services\BarcodeService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redirect;
@@ -46,6 +48,7 @@ class ProductController extends Controller
             'products' => $products,
             'categories' => Category::select('id', 'name')->get(),
             'brands' => Brand::select('id', 'name')->get(),
+            'canExport' => (bool) tenant()?->canExport(),
             'filters' => ['search' => $search, 'per_page' => (int) $request->get('per_page', 10)],
         ]);
     }
@@ -305,16 +308,12 @@ class ProductController extends Controller
     {
         Gate::authorize('manage-products');
 
-        $tenant = tenant();
-        if ($tenant && $tenant->products()->count() >= $tenant->maxProducts()) {
-            return Redirect::back()->with('error', 'Batas produk gratis ('.$tenant->maxProducts().') telah tercapai. Upgrade ke Premium untuk produk unlimited.');
-        }
-
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls,csv|max:5120',
         ]);
 
         $imported = 0;
+        $updated = 0;
         $errors = [];
         $rowNumber = 0;
 
@@ -328,6 +327,7 @@ class ProductController extends Controller
         if (empty($rows)) {
             session()->flash('import', [
                 'imported' => 0,
+                'updated' => 0,
                 'errors' => ['File Excel kosong atau tidak valid.'],
             ]);
 
@@ -400,31 +400,64 @@ class ProductController extends Controller
 
             $barcode = $rowData['barcode'] ?? null;
 
-            if (! blank($barcode)) {
-                $existing = Product::query()
-                    ->where('tenant_id', tenant_id())
-                    ->where('barcode', $barcode)
-                    ->exists();
+            $data = [
+                'name' => $rowData['name'],
+                'description' => $rowData['description'] ?? null,
+                'price' => (float) $rowData['price'],
+                'cost_price' => ! blank($rowData['cost_price'] ?? null) ? (float) $rowData['cost_price'] : null,
+                'stock' => (int) ($rowData['stock'] ?? 0),
+                'weight' => (int) ($rowData['weight'] ?? 0),
+                'category_id' => $category?->id,
+                'brand_id' => $brand?->id,
+                'status' => $status,
+            ];
+
+            try {
+                // Upsert: baris dengan barcode cocokkan (tenant_id, barcode);
+                // tanpa barcode cocokkan berdasarkan nama agar re-import idempoten.
+                $existing = blank($barcode)
+                    ? Product::query()
+                        ->where('tenant_id', tenant_id())
+                        ->where('name', $data['name'])
+                        ->first()
+                    : Product::query()
+                        ->where('tenant_id', tenant_id())
+                        ->where('barcode', $barcode)
+                        ->first();
 
                 if ($existing) {
-                    $errors[] = "Baris {$rowNumber}: Barcode '{$barcode}' sudah digunakan.";
+                    $updateData = $data;
+
+                    // Barcode kosong pada baris update = pertahankan barcode lama.
+                    if (! blank($barcode)) {
+                        $updateData['barcode'] = $barcode;
+                    }
+
+                    $existing->update($updateData);
+
+                    if ($existing->wasChanged('barcode')) {
+                        BarcodeService::bust($existing->getOriginal('barcode'));
+                        BarcodeService::bust($existing->barcode);
+                    }
+
+                    $updated++;
 
                     continue;
                 }
-            }
 
-            try {
+                // 🛠️ FIX: Kuota dicek per-baris saat akan membuat produk baru,
+                // agar baris yang tersisa dicatat sebagai error dan tidak
+                // melewati batas paket.
+                $tenant = tenant();
+                if ($tenant && $tenant->products()->count() >= $tenant->maxProducts()) {
+                    $errors[] = "Baris {$rowNumber}: Batas produk ({$tenant->maxProducts()}) telah tercapai.";
+
+                    continue;
+                }
+
                 $product = Product::create([
-                    'name' => $rowData['name'],
-                    'description' => $rowData['description'] ?? null,
-                    'price' => (float) $rowData['price'],
-                    'cost_price' => ! blank($rowData['cost_price'] ?? null) ? (float) $rowData['cost_price'] : null,
-                    'stock' => (int) ($rowData['stock'] ?? 0),
-                    'weight' => (int) ($rowData['weight'] ?? 0),
-                    'barcode' => $barcode,
-                    'category_id' => $category?->id,
-                    'brand_id' => $brand?->id,
-                    'status' => $status,
+                    ...$data,
+                    'barcode' => blank($barcode) ? null : $barcode,
                 ]);
 
                 if (blank($barcode)) {
@@ -443,6 +476,7 @@ class ProductController extends Controller
         // 🛠️ FIX 3: Dibungkus ke dalam array 'flash' -> 'import' agar dibaca oleh React (Inertia)
         session()->flash('import', [
             'imported' => $imported,
+            'updated' => $updated,
             'errors' => $errors,
         ]);
 
@@ -452,5 +486,22 @@ class ProductController extends Controller
     public function downloadTemplate(): BinaryFileResponse
     {
         return Excel::download(new ProductTemplateExport, 'template-produk.xlsx');
+    }
+
+    /**
+     * Mengekspor katalog produk ke Excel — khusus paket Premium.
+     * Kolom hasil ekspor selaras dengan kolom impor sehingga file dapat
+     * di-import ulang tanpa perubahan.
+     */
+    public function export(): BinaryFileResponse|RedirectResponse
+    {
+        Gate::authorize('manage-products');
+
+        $tenant = tenant();
+        if ($tenant && ! $tenant->canExport()) {
+            return Redirect::back()->with('error', 'Fitur export produk hanya tersedia untuk paket Premium.');
+        }
+
+        return Excel::download(new ProductExport, 'produk-'.now()->format('YmdHis').'.xlsx');
     }
 }

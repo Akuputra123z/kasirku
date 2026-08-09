@@ -36,7 +36,7 @@ class BillingService
 
     public function chargePendingPayment(Subscription $subscription, string $paymentMethod): ?array
     {
-        $email = $subscription->tenant->users()->value('email') ?? $subscription->tenant->name.'@tenant.local';
+        $email = $subscription->tenant->staffUsers()->value('email') ?? $subscription->tenant->name.'@tenant.local';
 
         $bank = match ($paymentMethod) {
             'bca_va' => 'bca',

@@ -5,6 +5,7 @@ import { Head, Link, useForm, router, usePage } from '@inertiajs/react';
 import type { ColumnDef } from '@tanstack/react-table';
 import {
     Download,
+    FileDown,
     MoreHorizontal,
     Plus,
     Printer,
@@ -103,10 +104,11 @@ interface Paginator<T> {
 interface Props {
     products: Paginator<Product>;
     categories: Category[];
+    canExport?: boolean;
     filters: { search?: string; per_page?: number };
 }
 
-export default function Index({ products, categories, filters }: Props) {
+export default function Index({ products, categories, canExport = false, filters }: Props) {
     const { tenant } = usePage().props;
     const isPremium = (tenant as { subscription_tier?: string } | null)?.subscription_tier === 'premium';
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -678,6 +680,22 @@ export default function Index({ products, categories, filters }: Props) {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {canExport && (
+                        <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="flex h-9 items-center gap-2 rounded-lg px-3 font-medium"
+                        >
+                            <a
+                                href={route('products.export')}
+                                download
+                                className="flex h-9 items-center gap-2 font-medium"
+                            >
+                                Ekspor <FileDown className="size-3.5" />
+                            </a>
+                        </Button>
+                    )}
                     <Button
                         variant="outline"
                         size="sm"
@@ -1478,9 +1496,9 @@ export default function Index({ products, categories, filters }: Props) {
                 open={isImportOpen}
                 onOpenChange={setIsImportOpen}
                 title="Import Produk"
-                description="Upload file CSV untuk menambahkan banyak produk sekaligus."
-                route="/products/import"
-                templateUrl="/products/import/template"
+                description="Upload file Excel untuk menambah atau memperbarui banyak produk sekaligus. Baris dengan barcode (atau nama) yang sudah ada akan diperbarui, bukan diduplikasi."
+                route={route('products.import')}
+                templateUrl={route('products.import.template')}
             />
 
             <ConfirmDialog

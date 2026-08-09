@@ -4,12 +4,19 @@ namespace App\Actions\Subscription;
 
 use App\Events\SubscriptionExpired;
 use App\Models\Tenant;
+use App\Services\SubscriptionService;
 use Illuminate\Support\Facades\Cache;
 
 class CheckExpiredSubscriptions
 {
     public function __invoke(): void
     {
+        // Saat fitur langganan dimatikan secara global, jangan suspend tenant
+        // yang "kadaluarsa" — semua tenant tampak premium tanpa batasan.
+        if (! app(SubscriptionService::class)->isEnabled()) {
+            return;
+        }
+
         $expired = Tenant::where('subscription_tier', 'premium')
             ->where('subscription_expires_at', '<', now())
             ->get();

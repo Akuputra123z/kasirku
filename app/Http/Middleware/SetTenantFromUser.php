@@ -11,6 +11,8 @@ class SetTenantFromUser
 {
     public function handle(Request $request, Closure $next)
     {
+        // IdentifyTenant (web group) mengikat tenant sesi/impersonasi lebih dulu;
+        // hanya ikat dari user bila belum ada yang terikat.
         if (! app()->bound('current.tenant') && $request->user()) {
             $tenantUser = TenantUser::where('user_id', $request->user()->id)
                 ->where('is_active', true)

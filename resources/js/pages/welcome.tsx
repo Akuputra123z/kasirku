@@ -26,6 +26,7 @@ import {
 import { useState, useRef } from 'react';
 import { dashboard, login, register } from '@/routes';
 import CategoryDropdown from '@/components/marketplace/CategoryDropdown';
+import MobileMenu from '@/components/marketplace/MobileMenu';
 
 export default function Welcome({
     canRegister = true,
@@ -70,7 +71,7 @@ export default function Welcome({
                             <Link href="/register" className="text-slate-500 dark:text-slate-400 hover:text-[#4648d4]">Mulai Berjualan</Link>
                         )}
                     </div>
-                    <div className="flex items-center space-x-6 text-slate-500 dark:text-slate-400">
+                    <div className="flex items-center space-x-6 text-slate-500 dark:text-slate-400 hidden sm:flex">
                         <Link href="/stores" className="hover:text-[#4648d4]">Promo</Link>
                         <span className="cursor-default">Bantuan</span>
                     </div>
@@ -109,11 +110,13 @@ export default function Welcome({
 
                         {/* Right: Icons + Profile */}
                         <div className="flex items-center gap-1 shrink-0">
-                            <Link href="/customer/notifications" className="p-2.5 text-slate-500 hover:text-[#4648d4] hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors relative">
+                            <MobileMenu categories={marketplaceCategories ?? []} />
+
+                            <Link href="/customer/notifications" className="p-2 sm:p-2.5 text-slate-500 hover:text-[#4648d4] hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors relative">
                                 <Bell className="size-5" />
                                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
                             </Link>
-                            <Link href="/cart" className="p-2.5 text-slate-500 hover:text-[#4648d4] hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors relative">
+                            <Link href="/cart" className="p-2 sm:p-2.5 text-slate-500 hover:text-[#4648d4] hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors relative">
                                 <ShoppingCart className="size-5" />
                                 {cartCount > 0 && (
                                     <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center font-bold">
@@ -121,11 +124,11 @@ export default function Welcome({
                                     </span>
                                 )}
                             </Link>
-                            <Link href="/customer/conversations" className="p-2.5 text-slate-500 hover:text-[#4648d4] hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                            <Link href="/customer/conversations" className="p-2 sm:p-2.5 text-slate-500 hover:text-[#4648d4] hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
                                 <MessageSquare className="size-5" />
                             </Link>
 
-                            <div className="w-px h-6 bg-gray-200 dark:bg-slate-700 mx-1.5" />
+                            <div className="w-px h-6 bg-gray-200 dark:bg-slate-700 mx-1.5 hidden sm:block" />
 
                             {isAuthenticated ? (
                                 <div className="relative" ref={profileRef}>
@@ -177,10 +180,10 @@ export default function Welcome({
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-2">
-                                    <Link href={login()} className="px-4 py-2 border border-[#4648d4] text-[#4648d4] font-semibold hover:bg-[#eef0ff] dark:hover:bg-[#4648d4]/20 transition-colors rounded-lg text-sm">
+                                    <Link href={login()} className="px-3 py-2 border border-[#4648d4] text-[#4648d4] font-semibold hover:bg-[#eef0ff] dark:hover:bg-[#4648d4]/20 transition-colors rounded-lg text-xs sm:text-sm sm:px-4 sm:py-2">
                                         Masuk
                                     </Link>
-                                    <Link href={register()} className="px-4 py-2 bg-[#4648d4] text-white font-semibold hover:bg-[#3b3db8] transition-colors rounded-lg text-sm">
+                                    <Link href={register()} className="px-3 py-2 bg-[#4648d4] text-white font-semibold hover:bg-[#3b3db8] transition-colors rounded-lg text-xs sm:text-sm sm:px-4 sm:py-2">
                                         Daftar
                                     </Link>
                                 </div>

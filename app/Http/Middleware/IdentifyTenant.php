@@ -10,7 +10,9 @@ class IdentifyTenant
 {
     public function handle(Request $request, Closure $next)
     {
-        if ($request->query('_tenant_clear')) {
+        // User yang sudah login TIDAK boleh membersihkan tenant sesinya lewat
+        // query param — hanya alur guest (registrasi/login) yang boleh.
+        if ($request->query('_tenant_clear') && ! $request->user()) {
             $request->session()->forget('tenant_id');
 
             if (app()->bound('current.tenant')) {
@@ -38,8 +40,8 @@ class IdentifyTenant
         $host = $request->getHost();
         $parts = explode('.', $host);
 
-        // Subdomain detection — only claim the tenant if it actually exists,
-        // otherwise fall through to query param / cookie / header check.
+        // Subdomain detection — hanya klaim tenant jika memang ada,
+        // otherwise fall through ke session binding user (SetTenantFromUser).
         if (count($parts) > 2 && ! filter_var($host, FILTER_VALIDATE_IP)) {
             $slug = $parts[0];
 
@@ -48,9 +50,14 @@ class IdentifyTenant
             }
         }
 
-        // Hanya izinkan switching tenant via query param jika belum login (proses registrasi/login)
-        if ($slug = $request->query('tenant') ?: $request->cookie('tenant')) {
-            return Tenant::where('slug', $slug)->first();
+        // Query param / cookie 'tenant' hanya dihormati untuk user yang belum
+        // login (proses registrasi & login). User yang sudah login dipetakan ke
+        // tenant-nya sendiri melalui SetTenantFromUser — mengabaikan input ini
+        // mencegah perpindahan tenant sukarela (cross-tenant access).
+        if (! $request->user()) {
+            if ($slug = $request->query('tenant') ?: $request->cookie('tenant')) {
+                return Tenant::where('slug', $slug)->first();
+            }
         }
 
         return null;

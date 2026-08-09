@@ -83,6 +83,9 @@ class OrderController extends Controller
     {
         Gate::authorize('manage-pos');
 
+        // Order wajib milik tenant aktif (Order tidak memakai TenantScope).
+        abort_unless((int) $order->tenant_id === (int) tenant_id(), 403, 'Pesanan bukan milik toko ini.');
+
         $tenant = tenant();
         if ($tenant && ! $tenant->canMarketplace()) {
             return redirect()->route('billing.index')->with('error', 'Fitur online orders hanya tersedia untuk Premium. Upgrade sekarang!');

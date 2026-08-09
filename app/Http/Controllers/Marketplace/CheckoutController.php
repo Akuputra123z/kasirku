@@ -8,10 +8,14 @@ use App\Models\Cart;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\Order;
+use App\Models\Product;
+use App\Models\ProductVariant;
+use App\Models\Tenant;
 use App\Models\TenantUser;
 use App\Models\User;
 use App\Notifications\NewOrder;
 use App\Services\MidtransService;
+use App\Services\RajaOngkirService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -102,7 +106,7 @@ class CheckoutController extends Controller
         ]);
     }
 
-    public function process(Request $request, MidtransService $midtrans)
+    public function process(Request $request, MidtransService $midtrans, RajaOngkirService $rajaongkir)
     {
         $rules = [
             'notes' => ['nullable', 'string', 'max:500'],
@@ -129,11 +133,16 @@ class CheckoutController extends Controller
 
         $validated = $request->validate($rules);
 
-        if (isset($validated['address_id'])) {
-            $address = CustomerAddress::findOrFail($validated['address_id']);
-        } else {
-            $customer = Customer::where('user_id', Auth::id())->first();
+        $customer = Customer::where('user_id', Auth::id())->first();
 
+        if (isset($validated['address_id'])) {
+            // IDOR: alamat wajib milik customer yang sedang login.
+            $address = CustomerAddress::with('customer')->findOrFail($validated['address_id']);
+
+            if (! $customer || $address->customer_id !== $customer->id) {
+                abort(403, 'Alamat bukan milik Anda.');
+            }
+        } else {
             if (! $customer) {
                 return back()->with('error', 'Akun pelanggan tidak ditemukan.');
             }
@@ -180,21 +189,59 @@ class CheckoutController extends Controller
         try {
             foreach ($groupedByStore as $tenantId => $items) {
                 $tenant = $items->first()->product->tenant;
+
+                // Toko non-aktif (langganan tidak berlaku) tidak boleh menerima
+                // pesanan baru — pembeli bisa menjatuhkan order yang tak terpenuhi.
+                if ($tenant->subscription_status !== 'active') {
+                    throw new \RuntimeException(
+                        "Toko \"{$tenant->name}\" sedang tidak aktif. Silakan coba kembali nanti."
+                    );
+                }
+
                 $subtotal = 0;
+                $totalWeight = 0;
 
                 $orderItemsData = [];
                 foreach ($items as $c) {
-                    $price = $c->variant
-                        ? ($c->product->display_price + $c->variant->additional_price)
-                        : $c->product->display_price;
-                    $quantity = min($c->quantity, $c->variant?->stock ?? $c->product->available_stock);
+                    // Lock baris produk/varian sekarang — mencegah overselling
+                    // akibat dua checkout bersamaan.
+                    $product = Product::whereKey($c->product_id)->lockForUpdate()->first();
+                    if (! $product) {
+                        throw new \RuntimeException('Produk tidak ditemukan.');
+                    }
+
+                    $variant = null;
+                    if ($c->product_variant_id) {
+                        $variant = ProductVariant::whereKey($c->product_variant_id)->lockForUpdate()->first();
+                        if (! $variant || $variant->product_id !== $product->id) {
+                            throw new \RuntimeException('Varian produk tidak valid.');
+                        }
+                    }
+
+                    $availableStock = $variant?->stock ?? $product->stock;
+
+                    // Tidak ada pemotongan qty diam-diam: jual sesuai stok atau
+                    // gagalkan pesanan.
+                    if ($c->quantity > $availableStock) {
+                        throw new \RuntimeException(
+                            "Stok \"{$product->name}\" tidak mencukupi (sisa {$availableStock})."
+                        );
+                    }
+
+                    $price = $variant
+                        ? ($product->display_price + $variant->additional_price)
+                        : $product->display_price;
+                    $quantity = $c->quantity;
                     $subtotal += $price * $quantity;
 
+                    $weight = $variant?->weight ?? $product->weight ?? 0;
+                    $totalWeight += $weight * $quantity;
+
                     $orderItemsData[] = [
-                        'product_id' => $c->product_id,
-                        'product_variant_id' => $c->product_variant_id,
-                        'product_name' => $c->product->name,
-                        'variant_name' => $c->variant?->name,
+                        'product_id' => $product->id,
+                        'product_variant_id' => $variant?->id,
+                        'product_name' => $product->name,
+                        'variant_name' => $variant?->name,
                         'quantity' => $quantity,
                         'price' => $price,
                         'subtotal' => $price * $quantity,
@@ -204,7 +251,7 @@ class CheckoutController extends Controller
                 $orderNumber = 'INV-'.now()->format('Ymd').'-'.strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
 
                 $ship = $shippingData->get($tenantId);
-                $shippingCost = $ship['cost'] ?? $tenant->shipping_cost;
+                $shippingCost = $this->resolveShippingCost($tenant, $address, $totalWeight, $ship, $rajaongkir);
 
                 $order = Order::create([
                     'order_number' => $orderNumber,
@@ -230,6 +277,15 @@ class CheckoutController extends Controller
 
                 foreach ($orderItemsData as $itemData) {
                     $order->items()->create($itemData);
+                }
+
+                // Kurangi stok HANYA setelah order tersimpan (transaksi penuh).
+                foreach ($order->items as $orderItem) {
+                    Product::whereKey($orderItem->product_id)->decrement('stock', $orderItem->quantity);
+
+                    if ($orderItem->product_variant_id) {
+                        ProductVariant::whereKey($orderItem->product_variant_id)->decrement('stock', $orderItem->quantity);
+                    }
                 }
 
                 $orders[] = $order;
@@ -321,5 +377,49 @@ class CheckoutController extends Controller
 
         return redirect()->route('marketplace.orders')
             ->with('success', 'Semua pesanan berhasil dibuat');
+    }
+
+    /**
+     * Ongkos kirim TIDAK PERNAH dipercaya dari client. Untuk toko yang
+     * memakai RajaOngkir (rajaongkir_city_id terisi), biaya dihitung ulang
+     * dari API; untuk toko tanpa RajaOngkir, dipakai biaya tetap toko.
+     *
+     * @param  array<string, mixed>|null  $ship
+     */
+    protected function resolveShippingCost(Tenant $tenant, CustomerAddress $address, int $totalWeight, ?array $ship, RajaOngkirService $rajaongkir): float
+    {
+        if (! $tenant->rajaongkir_city_id || ! $address->rajaongkir_city_id) {
+            return (float) $tenant->shipping_cost;
+        }
+
+        $courier = $ship['courier'] ?? null;
+        $service = $ship['service'] ?? null;
+
+        if (! $courier || ! $service) {
+            throw new \RuntimeException('Pilih metode pengiriman terlebih dahulu.');
+        }
+
+        // Biar aman, tolak checkout jika toko memakai kurir payload yang tidak
+        // dikenali — tidak ada fallback ke biaya dari client.
+        $rates = $rajaongkir->getCost(
+            (string) $tenant->rajaongkir_city_id,
+            (string) $address->rajaongkir_city_id,
+            max(1, $totalWeight),
+            $courier,
+        );
+
+        if ($rates === null) {
+            throw new \RuntimeException('Gagal menghitung ongkos kirim. Silakan coba kembali.');
+        }
+
+        foreach ($rates as $rate) {
+            if (($rate['service'] ?? null) === $service) {
+                return (float) $rate['cost'];
+            }
+        }
+
+        // Layanan yang dipilih tidak ditemukan dalam penawaran — tolak
+        // daripada menebak biaya.
+        throw new \RuntimeException('Layanan kurir sudah tidak tersedia, pilih ulang.');
     }
 }

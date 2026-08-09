@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Role;
 
 class RegisterStoreController extends Controller
 {
@@ -82,7 +83,16 @@ class RegisterStoreController extends Controller
                     PaymentMethod::create(['name' => $name, 'type' => $type, 'is_active' => true, 'tenant_id' => $tenant->id]);
                 }
 
-                $user->assignRole('admin');
+                // Pakai instance role milik tenant ini, bukan lookup nama global
+                // (spatie teams nonaktif → lookup global bisa mengenai role tenant lain).
+                $ownerRole = Role::where('guard_name', 'web')
+                    ->where('tenant_id', $tenant->id)
+                    ->where('name', 'admin')
+                    ->first();
+
+                if ($ownerRole) {
+                    $user->assignRole($ownerRole);
+                }
 
                 app(BillingService::class)->applyTrial($tenant);
 

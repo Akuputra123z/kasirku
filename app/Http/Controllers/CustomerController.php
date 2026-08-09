@@ -8,6 +8,7 @@ use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class CustomerController extends Controller
 {
@@ -21,9 +22,11 @@ class CustomerController extends Controller
         $customers = Customer::whereHas('stores', fn ($q) => $q->where('tenant_id', $tenantId))
             ->with(['storeCustomer' => fn ($q) => $q->where('tenant_id', $tenantId)])
             ->when($search, function ($q, $search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%");
+                $q->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%");
+                });
             })
             ->withCount('transactions')
             ->latest()
@@ -104,6 +107,9 @@ class CustomerController extends Controller
     {
         Gate::authorize('manage-customers');
 
+        // Pelanggan harus terdaftar di toko aktif (anti cross-tenant).
+        $this->assertCustomerBelongsToTenant($customer);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => ['nullable', 'email'],
@@ -120,12 +126,32 @@ class CustomerController extends Controller
     {
         Gate::authorize('manage-customers');
 
+        // Hanya menghapus keanggotaan toko aktif; data global pelanggan tetap
+        // ada jika masih digunakan toko lain.
+        $this->assertCustomerBelongsToTenant($customer);
+
         StoreCustomer::where('customer_id', $customer->id)
             ->where('tenant_id', tenant_id())
             ->delete();
 
-        $customer->delete();
+        $hasOtherMemberships = StoreCustomer::where('customer_id', $customer->id)->exists();
+
+        if (! $hasOtherMemberships) {
+            $customer->delete();
+        }
 
         return redirect()->back()->with('success', 'Pelanggan berhasil dihapus.');
+    }
+
+    /**
+     * @throws HttpException
+     */
+    protected function assertCustomerBelongsToTenant(Customer $customer): void
+    {
+        $isMember = StoreCustomer::where('customer_id', $customer->id)
+            ->where('tenant_id', tenant_id())
+            ->exists();
+
+        abort_unless($isMember, 403, 'Pelanggan ini bukan milik toko Anda.');
     }
 }

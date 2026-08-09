@@ -12,6 +12,7 @@ use App\Models\StoreCustomer;
 use App\Models\Transaction;
 use App\Models\TransactionDetail;
 use App\Models\Voucher;
+use App\Services\BarcodeService;
 use App\Services\PointService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -68,10 +69,9 @@ class TransactionController extends Controller
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.product_variant_id' => 'nullable|exists:product_variants,id',
             'items.*.quantity' => 'required|integer|min:1',
-            'items.*.price' => 'required|numeric',
             'tax_amount' => 'required|numeric|min:0',
             'discount_amount' => 'required|numeric|min:0',
-            'paid_amount' => 'required|numeric',
+            'paid_amount' => 'required|numeric|min:0',
             'payment_method_id' => 'required|exists:payment_methods,id',
             'order_type' => 'required|in:direct,service,pre_order',
             'table_number' => 'nullable|string|max:10',
@@ -84,28 +84,75 @@ class TransactionController extends Controller
 
         try {
             DB::transaction(function () use ($request, $activeShift, &$transaction) {
-                $calculatedSubtotal = 0;
+                // ── Harga selalu dihitung ulang dari katalog (server-side).
+                // items.*.price dari client TIDAK PERNAH dipercaya.
+                $itemsWithPrices = [];
+                $calculatedSubtotal = 0.0;
+
                 foreach ($request->items as $item) {
-                    $calculatedSubtotal += (float) $item['price'] * (int) $item['quantity'];
+                    $product = Product::lockForUpdate()->findOrFail($item['product_id']);
+
+                    $variant = null;
+                    if (! empty($item['product_variant_id'])) {
+                        $variant = ProductVariant::lockForUpdate()->findOrFail($item['product_variant_id']);
+
+                        if ($variant->product_id !== $product->id) {
+                            throw new \Exception("Varian {$variant->name} bukan milik produk {$product->name}.");
+                        }
+                    }
+
+                    $pricePerUnit = round((float) $product->price + (float) ($variant?->additional_price ?? 0), 2);
+
+                    $itemsWithPrices[] = [
+                        ...$item,
+                        'product' => $product,
+                        'variant' => $variant,
+                        'price' => $pricePerUnit,
+                    ];
+
+                    $calculatedSubtotal = round(
+                        $calculatedSubtotal + $pricePerUnit * (int) $item['quantity'],
+                        2,
+                    );
                 }
 
-                $taxAmount = (float) $request->tax_amount;
-                $discountAmount = (float) $request->discount_amount;
-                $calculatedTotal = $calculatedSubtotal + $taxAmount - $discountAmount;
-                $paidAmount = (float) $request->paid_amount;
+                $taxAmount = round((float) $request->tax_amount, 2);
+                $manualDiscount = round((float) $request->discount_amount, 2);
 
-                if ($paidAmount < $calculatedTotal) {
-                    throw new \Exception('Uang pembayaran tidak mencukupi.');
-                }
+                // Diskon voucher dihitung ulang server-side (cap max_discount
+                // dan jenis voucher diterapkan di sini, bukan dari client).
+                $voucherDiscount = 0.0;
+                $voucher = null;
 
                 if ($request->voucher_id) {
                     $voucher = Voucher::lockForUpdate()->findOrFail($request->voucher_id);
-                    if (! $voucher->isValid($calculatedTotal)) {
+
+                    if ((int) $voucher->tenant_id !== (int) tenant_id()) {
+                        throw new \Exception('Voucher tidak ditemukan di toko ini.');
+                    }
+
+                    $eligibleAmount = $calculatedSubtotal + $taxAmount - $manualDiscount;
+
+                    if (! $voucher->isValid($eligibleAmount)) {
                         throw new \Exception('Voucher sudah tidak berlaku.');
                     }
+
+                    $voucherDiscount = $voucher->calculateDiscount($eligibleAmount);
                 }
 
-                if ($request->redeemed_points && $request->customer_id) {
+                // Diskon poin dihitung dari konfigurasi tenant, bukan input client.
+                $pointConfig = PointService::getConfig();
+                $pointDiscount = 0.0;
+
+                if ((int) ($request->redeemed_points ?? 0) > 0) {
+                    if (! $request->customer_id) {
+                        throw new \Exception('Pelanggan wajib dipilih untuk penukaran poin.');
+                    }
+
+                    if ((int) $request->redeemed_points < (int) ($pointConfig['min_redeem_points'] ?? 0)) {
+                        throw new \Exception('Poin penukaran belum mencapai batas minimum.');
+                    }
+
                     $storeCustomer = StoreCustomer::lockForUpdate()
                         ->where('customer_id', $request->customer_id)
                         ->where('tenant_id', tenant_id())
@@ -114,6 +161,37 @@ class TransactionController extends Controller
                     if (! $storeCustomer || $storeCustomer->loyalty_points < (int) $request->redeemed_points) {
                         throw new \Exception('Poin pelanggan tidak mencukupi.');
                     }
+
+                    $pointDiscount = round(
+                        (int) $request->redeemed_points * (float) ($pointConfig['point_value'] ?? 0),
+                        2,
+                    );
+                }
+
+                // Pelanggan wajib terdaftar di toko ini (anti cross-tenant).
+                if ($request->customer_id) {
+                    $customerBelongsToStore = StoreCustomer::where('customer_id', $request->customer_id)
+                        ->where('tenant_id', tenant_id())
+                        ->exists();
+
+                    if (! $customerBelongsToStore) {
+                        throw new \Exception('Pelanggan tidak terdaftar di toko ini.');
+                    }
+                }
+
+                $calculatedTotal = round(
+                    $calculatedSubtotal + $taxAmount - $manualDiscount - $voucherDiscount - $pointDiscount,
+                    2,
+                );
+
+                if ($calculatedTotal < 0) {
+                    throw new \Exception('Total diskon melebihi total belanja.');
+                }
+
+                $paidAmount = round((float) $request->paid_amount, 2);
+
+                if (round($paidAmount, 2) < round($calculatedTotal, 2)) {
+                    throw new \Exception('Uang pembayaran tidak mencukupi.');
                 }
 
                 $transactionCode = 'TRX-'.now()->format('Ymd').'-'.strtoupper(bin2hex(random_bytes(3)));
@@ -123,10 +201,10 @@ class TransactionController extends Controller
                     'transaction_code' => $transactionCode,
                     'subtotal_amount' => $calculatedSubtotal,
                     'tax_amount' => $taxAmount,
-                    'discount_amount' => $discountAmount,
+                    'discount_amount' => $manualDiscount + $voucherDiscount + $pointDiscount,
                     'total_amount' => $calculatedTotal,
                     'paid_amount' => $paidAmount,
-                    'change_amount' => $paidAmount - $calculatedTotal,
+                    'change_amount' => round($paidAmount - $calculatedTotal, 2),
                     'payment_method_id' => $request->payment_method_id,
                     'shift_id' => $activeShift->id,
                     'user_id' => auth()->id(),
@@ -135,11 +213,12 @@ class TransactionController extends Controller
                     'status' => 'completed',
                     'customer_id' => $request->customer_id,
                     'voucher_id' => $request->voucher_id,
-                    'redeemed_points' => $request->redeemed_points ?? 0,
+                    'redeemed_points' => (int) ($request->redeemed_points ?? 0),
                 ]);
 
-                foreach ($request->items as $item) {
-                    $product = Product::lockForUpdate()->findOrFail($item['product_id']);
+                foreach ($itemsWithPrices as $item) {
+                    $product = $item['product'];
+                    $variant = $item['variant'];
 
                     if ($product->stock < $item['quantity']) {
                         throw new \Exception("Stok {$product->name} tidak cukup (Sisa: {$product->stock})");
@@ -147,8 +226,7 @@ class TransactionController extends Controller
 
                     $stockBefore = $product->stock;
 
-                    if (! empty($item['product_variant_id'])) {
-                        $variant = ProductVariant::lockForUpdate()->findOrFail($item['product_variant_id']);
+                    if ($variant) {
                         if ($variant->stock < $item['quantity']) {
                             throw new \Exception("Stok varian {$variant->name} tidak cukup (Sisa: {$variant->stock})");
                         }
@@ -159,7 +237,7 @@ class TransactionController extends Controller
                         'transaction_id' => $transaction->id,
                         'product_id' => $product->id,
                         'product_name' => $product->name,
-                        'variant_name' => $item['variant_name'] ?? null,
+                        'variant_name' => $variant?->name ?? $item['variant_name'] ?? null,
                         'extras_selected' => isset($item['extras']) ? json_encode($item['extras']) : null,
                         'quantity' => $item['quantity'],
                         'price' => $item['price'],
@@ -169,9 +247,12 @@ class TransactionController extends Controller
 
                     $product->decrement('stock', $item['quantity']);
 
+                    BarcodeService::bustForProductId($product->id);
+
                     StockMovement::create([
                         'tenant_id' => tenant_id(),
                         'product_id' => $product->id,
+                        'product_variant_id' => $variant?->id,
                         'user_id' => auth()->id(),
                         'type' => 'out',
                         'quantity' => $item['quantity'],
@@ -184,8 +265,7 @@ class TransactionController extends Controller
                     ]);
                 }
 
-                if ($request->voucher_id) {
-                    $voucher = Voucher::findOrFail($request->voucher_id);
+                if ($voucher) {
                     $voucher->increment('used_count');
 
                     if ($request->customer_id) {
@@ -197,7 +277,7 @@ class TransactionController extends Controller
                     }
                 }
 
-                if ($request->redeemed_points && $request->customer_id) {
+                if ((int) ($request->redeemed_points ?? 0) > 0 && $request->customer_id) {
                     PointService::redeemPoints(
                         $request->customer_id,
                         $transaction,

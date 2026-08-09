@@ -165,6 +165,43 @@ class MidtransService
         return null;
     }
 
+    /**
+     * Verifikasi signature webhook Midtrans.
+     *
+     * Per spesifikasi Midtrans, signature_key = sha512(order_id + status_code + gross_amount + server_key).
+     * Nilai harus digabung persis seperti yang dikirim oleh Midtrans (string asli, belum di-normalisasi).
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function verifyWebhookSignature(array $payload): bool
+    {
+        $expected = $payload['signature_key'] ?? null;
+
+        if (! $expected) {
+            return false;
+        }
+
+        $orderId = (string) ($payload['order_id'] ?? '');
+        $statusCode = (string) ($payload['status_code'] ?? '');
+        $grossAmount = (string) ($payload['gross_amount'] ?? '');
+
+        $computed = hash('sha512', $orderId.$statusCode.$grossAmount.$this->serverKey);
+
+        return hash_equals($computed, $expected);
+    }
+
+    /**
+     * Pastikan notifikasi berasal dari merchant Midtrans yang benar.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public function verifyMerchant(array $payload): bool
+    {
+        $expected = (string) config('midtrans.merchant_id', '');
+
+        return $expected !== '' && ($payload['merchant_id'] ?? null) === $expected;
+    }
+
     public function getTransactionStatus(string $orderId): ?array
     {
         if (! $this->isConfigured()) {

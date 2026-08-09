@@ -94,15 +94,22 @@ class PurchaseOrderController extends Controller
     {
         Gate::authorize('manage-purchases');
 
-        if ($purchaseOrder->status !== 'pending') {
-            return Redirect::back()->with('error', 'Purchase order is not pending.');
-        }
-
         $user = Auth::user();
 
-        DB::transaction(function () use ($purchaseOrder, $user) {
-            $purchaseOrder->load('details.product');
-            foreach ($purchaseOrder->details as $detail) {
+        $processed = false;
+
+        DB::transaction(function () use ($purchaseOrder, $user, &$processed) {
+            // Kunci baris PO di dalam transaksi: dua permintaan "receive"
+            // bersamaan hanya satu yang lolos (double-increment stok dicegah).
+            $lockedPo = PurchaseOrder::whereKey($purchaseOrder->id)->lockForUpdate()->first();
+
+            if (! $lockedPo || $lockedPo->status !== 'pending') {
+                return;
+            }
+
+            $lockedPo->load('details.product');
+
+            foreach ($lockedPo->details as $detail) {
                 $product = Product::lockForUpdate()->findOrFail($detail->product_id);
                 $stockBefore = $product->stock;
 
@@ -125,17 +132,23 @@ class PurchaseOrderController extends Controller
                     'stock_before' => $stockBefore,
                     'stock_after' => $product->fresh()->stock,
                     'reference_type' => PurchaseOrder::class,
-                    'reference_id' => $purchaseOrder->id,
+                    'reference_id' => $lockedPo->id,
                     'reason' => 'purchase_receive',
-                    'notes' => "PO: {$purchaseOrder->po_number}",
+                    'notes' => "PO: {$lockedPo->po_number}",
                 ]);
             }
 
-            $purchaseOrder->update([
+            $lockedPo->update([
                 'status' => 'received',
                 'received_date' => now(),
             ]);
+
+            $processed = true;
         });
+
+        if (! $processed) {
+            return Redirect::back()->with('error', 'Purchase order sudah diproses atau tidak valid.');
+        }
 
         return Redirect::back()->with('success', 'Purchase order received successfully.');
     }

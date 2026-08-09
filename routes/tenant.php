@@ -40,7 +40,9 @@ Route::middleware(['web', 'tenant.from-user'])->group(function () {
     Route::get('auth/google/register-redirect', [SocialiteController::class, 'registerRedirect'])->name('auth.google.register-redirect');
     Route::get('auth/google/callback', [SocialiteController::class, 'callback'])->name('auth.google.callback');
     Route::middleware(['auth'])->group(function () {
-        Route::post('email/verify-otp', [EmailVerificationOtpController::class, 'verify'])->name('verification.verify-otp');
+        Route::post('email/verify-otp', [EmailVerificationOtpController::class, 'verify'])
+            ->middleware('throttle:6,1')
+            ->name('verification.verify-otp');
         Route::get('suspended', function () {
             return Inertia::render('suspended', [
                 'tenantName' => session('suspended_tenant', 'Your store'),
@@ -81,9 +83,11 @@ Route::middleware(['web', 'tenant.from-user'])->group(function () {
         Route::get('reports/pdf', [ReportController::class, 'exportPdf'])->name('reports.pdf')->middleware('permission:export-reports');
         Route::get('reports/excel', [ReportController::class, 'exportExcel'])->name('reports.excel')->middleware('permission:export-reports');
 
-        Route::get('shifts', [ShiftController::class, 'index'])->name('shifts.index');
-        Route::post('shifts/start', [ShiftController::class, 'start'])->name('shifts.start');
-        Route::post('shifts/{shift}/close', [ShiftController::class, 'close'])->name('shifts.close');
+        Route::middleware('permission:manage-shifts')->group(function () {
+            Route::get('shifts', [ShiftController::class, 'index'])->name('shifts.index');
+            Route::post('shifts/start', [ShiftController::class, 'start'])->name('shifts.start');
+            Route::post('shifts/{shift}/close', [ShiftController::class, 'close'])->name('shifts.close');
+        });
 
         Route::get('vouchers', [VoucherController::class, 'index'])->name('vouchers.index')->middleware('permission:manage-vouchers');
         Route::post('vouchers', [VoucherController::class, 'store'])->name('vouchers.store')->middleware('permission:manage-vouchers');
@@ -117,15 +121,19 @@ Route::middleware(['web', 'tenant.from-user'])->group(function () {
         Route::patch('settings/store', [StoreController::class, 'update'])->name('settings.store.update');
 
         // ─── Online Orders ───────────────────────────────────────────────
-        Route::get('online-orders', [OrderController::class, 'index'])->name('online-orders.index');
-        Route::get('online-orders/{order}', fn () => redirect()->route('online-orders.index'))->name('online-orders.show');
-        Route::patch('online-orders/{order}', [OrderController::class, 'update'])->name('online-orders.update');
+        Route::middleware('permission:manage-orders')->group(function () {
+            Route::get('online-orders', [OrderController::class, 'index'])->name('online-orders.index');
+            Route::get('online-orders/{order}', fn () => redirect()->route('online-orders.index'))->name('online-orders.show');
+            Route::patch('online-orders/{order}', [OrderController::class, 'update'])->name('online-orders.update');
+        });
 
         // ─── Marketplace Categories (read-only) ──────────────────────────
         Route::get('marketplace-categories', [TenantMarketplaceCategoryController::class, 'index'])->name('marketplace-categories');
 
         // ─── Reviews ─────────────────────────────────────────────────────
-        Route::get('reviews', [TenantReviewController::class, 'index'])->name('tenant.reviews.index');
+        Route::get('reviews', [TenantReviewController::class, 'index'])
+            ->middleware('permission:manage-orders')
+            ->name('tenant.reviews.index');
 
         // ─── Notifications ───────────────────────────────────────────────
         Route::get('notifications/unread', [TenantNotificationController::class, 'unread'])->name('tenant.notifications.unread');
@@ -133,10 +141,12 @@ Route::middleware(['web', 'tenant.from-user'])->group(function () {
         Route::post('notifications/read-all', [TenantNotificationController::class, 'readAll'])->name('tenant.notifications.read-all');
 
         // ─── Store Chat ──────────────────────────────────────────────────
-        Route::get('conversations', [TenantChatController::class, 'index'])->name('tenant.chat.index');
-        Route::get('conversations/{conversation}', [TenantChatController::class, 'show'])->name('tenant.chat.show');
-        Route::post('conversations/{conversation}/messages', [TenantChatController::class, 'sendMessage'])->name('tenant.chat.send');
-        Route::get('conversations/{conversation}/poll', [TenantChatController::class, 'poll'])->name('tenant.chat.poll');
+        Route::middleware('permission:manage-orders')->group(function () {
+            Route::get('conversations', [TenantChatController::class, 'index'])->name('tenant.chat.index');
+            Route::get('conversations/{conversation}', [TenantChatController::class, 'show'])->name('tenant.chat.show');
+            Route::post('conversations/{conversation}/messages', [TenantChatController::class, 'sendMessage'])->name('tenant.chat.send');
+            Route::get('conversations/{conversation}/poll', [TenantChatController::class, 'poll'])->name('tenant.chat.poll');
+        });
 
         // ─── Billing ─────────────────────────────────────────────────────
         Route::get('billing', [BillingController::class, 'index'])->name('billing.index');

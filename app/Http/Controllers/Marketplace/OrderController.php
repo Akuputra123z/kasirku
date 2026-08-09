@@ -307,6 +307,9 @@ class OrderController extends Controller
             $midtrans->cancelTransaction($midtransOrderId);
         }
 
+        // Kembalikan stok yang terkunci di checkout.
+        $order->restoreStock();
+
         $order->update([
             'status' => 'cancelled',
             'payment_status' => 'failed',
@@ -343,6 +346,17 @@ class OrderController extends Controller
                     'payment_status' => 'paid',
                     'status' => 'confirmed',
                     'midtrans_transaction_id' => $transactionId,
+                ]);
+            }
+
+            if (in_array($transactionStatus, ['deny', 'cancel', 'expire'])) {
+                if ($order->payment_status !== 'failed') {
+                    $order->restoreStock();
+                }
+
+                $order->update([
+                    'payment_status' => 'failed',
+                    'status' => 'cancelled',
                 ]);
             }
 

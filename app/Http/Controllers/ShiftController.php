@@ -7,7 +7,9 @@ use App\Http\Requests\StartShiftRequest;
 use App\Models\PaymentMethod;
 use App\Models\Shift;
 use App\Models\Transaction;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redirect;
 use Inertia\Inertia;
 
@@ -16,23 +18,20 @@ class ShiftController extends Controller
     public function index()
     {
         $shifts = Shift::with('user')
-            ->withCount('transactions')
-            ->withSum('transactions', 'total_amount')
+            ->withCount(['transactions' => fn ($query) => $query->where('status', 'completed')])
+            ->withSum(['transactions as transactions_sum_total_amount' => fn ($query) => $query->where('status', 'completed')], 'total_amount')
             ->latest()
             ->paginate(10);
 
         $activeShift = Shift::with('user')
-            ->withCount('transactions')
-            ->withSum('transactions', 'total_amount')
+            ->withCount(['transactions' => fn ($query) => $query->where('status', 'completed')])
+            ->withSum(['transactions as transactions_sum_total_amount' => fn ($query) => $query->where('status', 'completed')], 'total_amount')
             ->where('user_id', Auth::id())
             ->whereNull('end_time')
             ->first();
 
         if ($activeShift) {
-            $cashTotal = Transaction::where('shift_id', $activeShift->id)
-                ->where('payment_method_id', PaymentMethod::where('name', 'Cash')->value('id'))
-                ->sum('total_amount');
-            $activeShift->expected_cash = $activeShift->starting_cash + (float) $cashTotal;
+            $activeShift->expected_cash = $this->calculateExpectedCash($activeShift);
         }
 
         return Inertia::render('shifts/index', [
@@ -43,47 +42,78 @@ class ShiftController extends Controller
 
     public function start(StartShiftRequest $request)
     {
-        // Proteksi: Cek apakah user sudah memiliki shift yang masih aktif
-        $activeShift = Shift::where('user_id', Auth::id())
-            ->whereNull('end_time')
-            ->exists();
+        $shift = null;
 
-        if ($activeShift) {
+        DB::transaction(function () use ($request, &$shift) {
+            // Serialisasi pembuatan shift per user: kunci row user agar dua
+            // permintaan "start" bersamaan tidak membuat dua shift aktif.
+            User::whereKey(Auth::id())->lockForUpdate()->first();
+
+            if (Shift::where('user_id', Auth::id())->whereNull('end_time')->exists()) {
+                return;
+            }
+
+            $shift = Shift::create([
+                'user_id' => Auth::id(),
+                'start_time' => now(),
+                'starting_cash' => $request->starting_cash,
+            ]);
+        });
+
+        if (! $shift) {
             return Redirect::back()->with('error', 'Anda masih memiliki shift yang belum ditutup.');
         }
-
-        // Buat Shift Baru
-        Shift::create([
-            'user_id' => Auth::id(),
-            'start_time' => now(),
-            'starting_cash' => $request->starting_cash,
-        ]);
 
         return Redirect::back()->with('success', 'Shift berhasil dimulai.');
     }
 
     public function close(CloseShiftRequest $request, Shift $shift)
     {
-        // Proteksi Keamanan:
-        // Pastikan shift ini milik user yang sedang login dan shift tersebut memang belum ditutup
-        if ($shift->user_id !== Auth::id() || $shift->end_time !== null) {
+        $closed = false;
+
+        DB::transaction(function () use ($shift, $request, &$closed) {
+            // Kunci baris shift di dalam transaksi: dua permintaan "close"
+            // bersamaan hanya satu yang berhasil (double-close dicegah).
+            $lockedShift = Shift::whereKey($shift->id)->lockForUpdate()->first();
+
+            // Shift harus milik user yang login dan memang belum ditutup
+            if (! $lockedShift || $lockedShift->user_id !== Auth::id() || $lockedShift->end_time !== null) {
+                return;
+            }
+
+            $lockedShift->update([
+                'end_time' => now(),
+                'expected_cash' => $this->calculateExpectedCash($lockedShift),
+                'actual_cash' => $request->actual_cash,
+                'notes' => $request->notes,
+            ]);
+
+            $closed = true;
+        });
+
+        if (! $closed) {
             return Redirect::back()->with('error', 'Tindakan tidak valid atau shift sudah ditutup sebelumnya.');
         }
 
-        $totalCashTransactions = Transaction::where('shift_id', $shift->id)
-            ->where('payment_method_id', PaymentMethod::where('name', 'Cash')->value('id'))
+        return Redirect::back()->with('success', 'Shift berhasil ditutup.');
+    }
+
+    /**
+     * Kas yang diharapkan = uang awal + transaksi metode Cash yang sudah completed.
+     */
+    protected function calculateExpectedCash(Shift $shift): float
+    {
+        $cashMethodIds = PaymentMethod::where('type', 'Cash')->pluck('id');
+
+        if ($cashMethodIds->isEmpty()) {
+            return (float) $shift->starting_cash;
+        }
+
+        $cashTotal = Transaction::where('shift_id', $shift->id)
+            ->where('status', 'completed')
+            ->whereIn('payment_method_id', $cashMethodIds)
             ->sum('total_amount');
 
-        $expected = $shift->starting_cash + $totalCashTransactions;
-
-        // Update Data Shift
-        $shift->update([
-            'end_time' => now(),
-            'expected_cash' => $expected,
-            'actual_cash' => $request->actual_cash,
-            'notes' => $request->notes,
-        ]);
-
-        return Redirect::back()->with('success', 'Shift berhasil ditutup.');
+        return (float) $shift->starting_cash + (float) $cashTotal;
     }
 }

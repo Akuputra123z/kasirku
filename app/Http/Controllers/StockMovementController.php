@@ -6,6 +6,7 @@ use App\Http\Requests\StoreStockMovementRequest;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\StockMovement;
+use App\Services\BarcodeService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -93,6 +94,8 @@ class StockMovementController extends Controller
         DB::transaction(function () use ($validated, $user) {
             $product = Product::lockForUpdate()->findOrFail($validated['product_id']);
             $quantity = (int) $validated['quantity'];
+
+            BarcodeService::bustForProductId($product->id);
 
             if ($variantId = $validated['product_variant_id'] ?? null) {
                 $variant = ProductVariant::lockForUpdate()->findOrFail($variantId);

@@ -10,32 +10,41 @@ class CheckExpiredSubscriptions
 {
     public function __invoke(): void
     {
-        $expiredIds = Tenant::where('subscription_tier', 'premium')
+        $expired = Tenant::where('subscription_tier', 'premium')
             ->where('subscription_expires_at', '<', now())
-            ->pluck('id');
+            ->get();
 
-        if ($expiredIds->isEmpty()) {
+        if ($expired->isEmpty()) {
             return;
         }
 
-        $graceDays = config('subscription.grace_days');
-
+        $graceDays = (int) config('subscription.grace_days', 7);
         $cutoff = now()->subDays($graceDays);
 
-        $toDowngrade = Tenant::whereIn('id', $expiredIds)
-            ->where('subscription_expires_at', '<', $cutoff)
-            ->update([
-                'subscription_tier' => 'free',
-                'subscription_expires_at' => null,
-            ]);
+        foreach ($expired as $tenant) {
+            Cache::forget("tenant.{$tenant->id}.is_premium");
 
-        Tenant::whereIn('id', $expiredIds)
-            ->where('subscription_expires_at', '>=', $cutoff)
-            ->get()
-            ->each(fn ($t) => SubscriptionExpired::dispatch($t));
+            // Melewati masa tenggang → akses benar-benar dicabut.
+            if ($tenant->subscription_expires_at->lt($cutoff)) {
+                $tenant->update([
+                    'subscription_tier' => 'free',
+                    'subscription_expires_at' => null,
+                    'subscription_status' => 'suspended',
+                ]);
 
-        foreach ($expiredIds as $id) {
-            Cache::forget("tenant.{$id}.is_premium");
+                continue;
+            }
+
+            // Dalam masa tenggang: akses dipertahankan (status 'active'), namun
+            // notifikasi kadaluarsa hanya dikirim SEKALI per hari — bukan setiap
+            // run scheduler (mencegah spam notifikasi berulang).
+            $tenant->update(['subscription_status' => 'active']);
+
+            $cacheKey = "tenant.{$tenant->id}.expiry_notified.".now()->toDateString();
+
+            if (Cache::add($cacheKey, true, now()->endOfDay())) {
+                SubscriptionExpired::dispatch($tenant);
+            }
         }
     }
 }

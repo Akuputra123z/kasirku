@@ -130,7 +130,7 @@ class DashboardController extends Controller
                         'category_name' => $p->category_name,
                         'image' => $p->image,
                         'total_qty' => (int) $p->total_qty,
-                        'total_sales' => (float) $p->total_sales,
+                        'total_sales' => round((float) $p->total_sales, 2),
                         'stock' => (int) $p->stock,
                         'progress' => min(100, round(($p->total_sales / $maxSales) * 100)),
                     ];
@@ -147,13 +147,19 @@ class DashboardController extends Controller
                 ->orderByDesc('total_sales')
                 ->limit(5)
                 ->get()
+                ->map(fn ($row) => [
+                    'name' => $row->name,
+                    'total_sales' => round((float) $row->total_sales, 2),
+                    'total_trx' => (int) $row->total_trx,
+                ])
+                ->values()
                 ->toArray();
 
             return [
                 'stats' => [
-                    'totalEarnings' => $totalEarnings,
+                    'totalEarnings' => round((float) $totalEarnings, 2),
                     'totalSales' => $totalSales,
-                    'weeklySales' => $weeklySales,
+                    'weeklySales' => round((float) $weeklySales, 2),
                     'totalOrders' => $totalOrders,
                     'earningsGrowth' => $earningsGrowth,
                     'weeklyGrowth' => $weeklyGrowth,

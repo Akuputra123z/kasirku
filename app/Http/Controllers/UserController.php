@@ -13,6 +13,8 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
+    protected const RESERVED_ROLE_NAMES = ['super-admin'];
+
     public function index(Request $request): Response
     {
         $search = $request->get('search');
@@ -24,8 +26,10 @@ class UserController extends Controller
 
         $users = User::whereIn('id', $tenantUserIds)
             ->when($search, function ($q, $search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
+                $q->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
             })
             ->with('roles', 'tenantUsers')
             ->latest()
@@ -33,6 +37,7 @@ class UserController extends Controller
 
         $roles = Role::where('guard_name', 'web')
             ->where('name', '!=', 'super-admin')
+            ->where('tenant_id', $tenant?->id)
             ->pluck('name');
 
         return Inertia::render('users/index', [
@@ -48,7 +53,12 @@ class UserController extends Controller
             'name' => 'required|string|max:255',
             'email' => ['required', 'email', Rule::unique('users')],
             'password' => 'required|string|min:8',
-            'role' => 'required|string|exists:roles,name',
+            'role' => [
+                'required',
+                'string',
+                'not_in:'.implode(',', self::RESERVED_ROLE_NAMES),
+                Rule::exists('roles', 'name')->where('tenant_id', tenant_id()),
+            ],
         ]);
 
         $tenant = tenant();
@@ -70,7 +80,7 @@ class UserController extends Controller
             'role' => $validated['role'],
         ]);
 
-        $user->assignRole($validated['role']);
+        $this->assignTenantRole($user, $validated['role']);
 
         return redirect()->back()->with('flash', [
             'success' => 'Pengguna berhasil ditambahkan.',
@@ -79,11 +89,19 @@ class UserController extends Controller
 
     public function update(Request $request, User $user): RedirectResponse
     {
+        // Target user wajib menjadi anggota tenant aktif (anti cross-tenant).
+        $this->assertMemberOfTenant($user);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => ['required', 'email', Rule::unique('users')->ignore($user->id)],
             'password' => 'nullable|string|min:8',
-            'role' => 'required|string|exists:roles,name',
+            'role' => [
+                'required',
+                'string',
+                'not_in:'.implode(',', self::RESERVED_ROLE_NAMES),
+                Rule::exists('roles', 'name')->where('tenant_id', tenant_id()),
+            ],
         ]);
 
         $user->update([
@@ -100,7 +118,7 @@ class UserController extends Controller
             $tenantUser->update(['role' => $validated['role']]);
         }
 
-        $user->syncRoles([$validated['role']]);
+        $this->assignTenantRole($user, $validated['role']);
 
         return redirect()->back()->with('flash', [
             'success' => 'Pengguna berhasil diperbarui.',
@@ -109,14 +127,50 @@ class UserController extends Controller
 
     public function destroy(User $user): RedirectResponse
     {
+        // Hanya boleh menghapus keanggotaan dari tenant aktif.
+        $this->assertMemberOfTenant($user);
+
         TenantUser::where('user_id', $user->id)
             ->where('tenant_id', tenant()?->id)
             ->delete();
 
-        $user->delete();
+        $remainingMemberships = TenantUser::where('user_id', $user->id)->exists();
+
+        // Akun yang masih dipakai toko lain tidak boleh ikut terhapus.
+        if (! $remainingMemberships) {
+            $user->delete();
+        }
 
         return redirect()->back()->with('flash', [
-            'success' => 'Pengguna berhasil dihapus.',
+            'success' => 'Pengguna berhasil dihapus dari toko ini.',
         ]);
+    }
+
+    /**
+     * Sync role spatie dengan instance role milik tenant aktif, bukan lookup
+     * nama global (spatie teams nonaktif → lookup nama bisa mengenai role
+     * tenant lain).
+     */
+    protected function assignTenantRole(User $user, string $roleName): void
+    {
+        $role = Role::where('guard_name', 'web')
+            ->where('tenant_id', tenant()?->id)
+            ->where('name', $roleName)
+            ->first();
+
+        if (! $role) {
+            return;
+        }
+
+        $user->syncRoles([$role]);
+    }
+
+    protected function assertMemberOfTenant(User $user): void
+    {
+        $isMember = TenantUser::where('user_id', $user->id)
+            ->where('tenant_id', tenant()?->id)
+            ->exists();
+
+        abort_unless($isMember, 403, 'Pengguna ini bukan anggota toko Anda.');
     }
 }

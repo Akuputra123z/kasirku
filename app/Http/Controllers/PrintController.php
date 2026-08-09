@@ -25,6 +25,10 @@ class PrintController extends Controller
     {
         Gate::authorize('manage-pos');
 
+        // Defense-in-depth: transaksi wajib milik tenant aktif (global scope
+        // berlaku saat tenant ter-bind, tapi jangan hanya bergantung padanya).
+        abort_unless((int) $transaction->tenant_id === (int) tenant_id(), 403, 'Transaksi bukan milik toko ini.');
+
         $transaction->load('details', 'paymentMethod', 'user', 'customer');
 
         $defaultDriver = $this->getDefaultDriver();
@@ -137,6 +141,9 @@ class PrintController extends Controller
     public function raw(Request $request, Transaction $transaction): JsonResponse
     {
         Gate::authorize('manage-pos');
+
+        // Defense-in-depth: transaksi wajib milik tenant aktif.
+        abort_unless((int) $transaction->tenant_id === (int) tenant_id(), 403, 'Transaksi bukan milik toko ini.');
 
         $rateLimitKey = 'print-raw:'.$request->user()?->id;
         if (RateLimiter::tooManyAttempts($rateLimitKey, 5)) {

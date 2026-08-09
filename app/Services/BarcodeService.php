@@ -18,9 +18,15 @@ class BarcodeService
 
         $cached = Cache::store('file')->get($cacheKey);
         if ($cached !== null) {
+            // Stok TIDAK pernah di-cache — selalu dibaca fresh supaya hasil
+            // scan stok tidak basi setelah penjualan/penyesuaian.
+            $cached['stock'] = (int) (Product::where('id', $cached['id'])->value('stock') ?? 0);
+
             return $cached;
         }
 
+        // Hanya perbolehkan bila tepat satu produk aktif memegang barcode
+        // tersebut — duplikat = tolak, jangan pilih sembarangan.
         $product = Product::query()
             ->where('barcode', $barcode)
             ->where('status', 'active')
@@ -28,20 +34,13 @@ class BarcodeService
                 'category:id,name',
                 'variants:id,product_id,name,additional_price',
             ])
-            ->first([
-                'id',
-                'name',
-                'price',
-                'stock',
-                'image',
-                'category_id',
-            ]);
+            ->get(['id', 'name', 'price', 'stock', 'image', 'category_id']);
 
-        if (! $product) {
+        if ($product->count() !== 1) {
             return null;
         }
 
-        $data = $product->toArray();
+        $data = $product->first()->toArray();
 
         Cache::store('file')->put($cacheKey, $data, self::CACHE_TTL);
 
@@ -52,6 +51,15 @@ class BarcodeService
     {
         if ($tenantId = tenant_id()) {
             Cache::store('file')->forget(self::CACHE_PREFIX.$tenantId.':'.$barcode);
+        }
+    }
+
+    public static function bustForProductId(int $productId): void
+    {
+        $barcode = Product::where('id', $productId)->value('barcode');
+
+        if ($barcode) {
+            self::bust((string) $barcode);
         }
     }
 }

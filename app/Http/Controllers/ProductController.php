@@ -31,12 +31,13 @@ class ProductController extends Controller
         $search = $request->get('search');
 
         $products = Product::with(['category', 'brand', 'variants'])
-            ->when($search, fn ($q, $s) => $q->where('name', 'like', "%{$s}%")
+            ->when($search, fn ($q, $s) => $q->where(fn ($sub) => $sub
+                ->where('name', 'like', "%{$s}%")
                 ->orWhere('barcode', 'like', "%{$s}%")
                 ->orWhere('description', 'like', "%{$s}%")
                 ->orWhereHas('category', fn ($cq) => $cq->where('name', 'like', "%{$s}%"))
                 ->orWhereHas('brand', fn ($bq) => $bq->where('name', 'like', "%{$s}%"))
-            )
+            ))
             ->latest()
             ->paginate((int) $request->get('per_page', 10))
             ->withQueryString();
@@ -146,14 +147,40 @@ class ProductController extends Controller
         }
 
         if (isset($validated['variants'])) {
-            $product->variants()->delete();
-            $product->variants()->createMany(
-                array_map(fn ($variant) => [
-                    ...$variant,
-                    'weight' => $variant['weight'] ?? 0,
-                    'stock' => $variant['stock'] ?? 0,
-                ], $validated['variants'])
-            );
+            // Sync varian tanpa menghapus row lama: stok & history stock-movement
+            // varian yang masih ada PERTAHAN, varian yang dihapus dari form
+            // dibersihkan. (Sebelumnya delete-all + createMany mereset stok ke
+            // nilai client dan memutus relasi StockMovement.)
+            $keepVariantIds = [];
+
+            foreach ($validated['variants'] as $variant) {
+                $data = [
+                    'name' => $variant['name'],
+                    'additional_price' => (float) ($variant['additional_price'] ?? 0),
+                    'sku' => $variant['sku'] ?? null,
+                    'weight' => (int) ($variant['weight'] ?? 0),
+                ];
+
+                // Hanya perbarui varian yang benar-benar milik produk ini
+                // (anti cross-tenant via id arbitrer).
+                if (! empty($variant['id']) && $existing = $product->variants()->find($variant['id'])) {
+                    $existing->update($data);
+                    $keepVariantIds[] = $existing->id;
+
+                    continue;
+                }
+
+                $created = $product->variants()->create([
+                    ...$data,
+                    'stock' => (int) ($variant['stock'] ?? 0),
+                ]);
+
+                $keepVariantIds[] = $created->id;
+            }
+
+            $product->variants()
+                ->whereNotIn('id', $keepVariantIds)
+                ->delete();
         }
 
         return Redirect::back()->with('success', 'Product updated successfully.');

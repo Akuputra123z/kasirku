@@ -18,9 +18,11 @@ class SupplierController extends Controller
 
         $search = $request->get('search');
 
-        $suppliers = Supplier::when($search, fn ($q, $s) => $q->where('name', 'like', "%{$s}%")
+        $suppliers = Supplier::when($search, fn ($q, $s) => $q->where(fn ($sub) => $sub
+            ->where('name', 'like', "%{$s}%")
             ->orWhere('email', 'like', "%{$s}%")
-            ->orWhere('phone', 'like', "%{$s}%"))
+            ->orWhere('phone', 'like', "%{$s}%")
+        ))
             ->latest()
             ->paginate(10)
             ->withQueryString();

@@ -121,7 +121,7 @@ export default function PpobProducts({
                 <div className="flex flex-col lg:flex-row gap-8">
                     <DashboardSidebar
                         user={user}
-                        memberLevel="Silver"
+                        memberLevel=""
                         pointsToNextLevel={0}
                         activeSection="ppob"
                         onNavigate={handleSidebarNavigate}

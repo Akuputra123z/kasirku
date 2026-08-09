@@ -5,25 +5,14 @@ import { useState } from 'react';
 
 export default function Newsletter() {
     const [email, setEmail] = useState('');
-    const [subscribed, setSubscribed] = useState(false);
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         if (email.trim()) {
-            router.post('/customer/register', { email, name: email.split('@')[0], password: '', password_confirmation: '' }, {
-                onError: () => setSubscribed(true),
-                onSuccess: () => setSubscribed(true),
-            });
+            // Jangan membuat akun otomatis lewat endpoint registrasi dengan
+            // password kosong — arahkan ke halaman pendaftaran yang benar.
+            router.visit(`/customer/register?email=${encodeURIComponent(email.trim())}`);
         }
-    }
-
-    if (subscribed) {
-        return (
-            <section className="bg-emerald-50 dark:bg-emerald-900/20 rounded-3xl p-8 md:p-12 text-center">
-                <h2 className="text-2xl font-bold mb-2">Terima Kasih!</h2>
-                <p className="text-slate-600 dark:text-slate-400">Email Anda telah terdaftar. Kami akan mengirimkan promo terbaru.</p>
-            </section>
-        );
     }
 
     return (

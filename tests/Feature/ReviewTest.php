@@ -118,6 +118,8 @@ test('customer cannot submit review for non-completed order', function () {
 
 test('store can view their reviews', function () {
     $tenantUser = User::factory()->storeOwner($this->tenant)->create();
+    $tenantUser->givePermissionTo('manage-orders');
+
     $customer = User::factory()->create();
     $order2 = Order::create([
         'user_id' => $customer->id,

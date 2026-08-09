@@ -756,6 +756,11 @@ export default function POS({
 
     const handlePayment = (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (isProcessing) {
+            return;
+        }
+
         const paid = parseFloat(paidAmount);
 
         if (isNaN(paid) || paid < total) {

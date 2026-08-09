@@ -30,7 +30,7 @@ const settingsMenus: MenuItem[] = [
 
 export default function DashboardSidebar({
     user,
-    memberLevel = 'Silver',
+    memberLevel = '',
     pointsToNextLevel = 0,
     activeSection,
     onNavigate,
@@ -42,6 +42,8 @@ export default function DashboardSidebar({
     onNavigate: (key: string) => void;
 }) {
     const initial = (user?.name?.[0] || 'U').toUpperCase();
+    const knownTiers = ['Silver', 'Gold', 'Platinum'];
+    const tierLabel = memberLevel && knownTiers.includes(memberLevel) ? `Member ${memberLevel}` : 'Member';
 
     return (
         <aside className="w-full lg:w-64 flex-shrink-0 space-y-4">
@@ -58,13 +60,17 @@ export default function DashboardSidebar({
                     </div>
                     <div>
                         <p className="font-bold text-sm">{user?.name || 'Customer'}</p>
-                        <p className="text-[10px] text-gray-400">Member {memberLevel}</p>
+                        <p className="text-[10px] text-gray-400">{tierLabel}</p>
                     </div>
                 </Link>
-                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-[#4648d4] w-2/3 rounded-full"></div>
-                </div>
-                <p className="text-[10px] text-gray-400 text-right">{pointsToNextLevel} poin lagi ke Gold</p>
+                {pointsToNextLevel > 0 && (
+                    <>
+                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-[#4648d4] w-2/3 rounded-full"></div>
+                        </div>
+                        <p className="text-[10px] text-gray-400 text-right">{pointsToNextLevel} poin lagi ke Gold</p>
+                    </>
+                )}
             </div>
 
             <div className="bg-white rounded-xl border border-gray-200 p-3 flex flex-col gap-4">

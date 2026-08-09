@@ -9,15 +9,18 @@ use App\Models\CustomerAddress;
 use App\Models\CustomerBankAccount;
 use App\Models\Order;
 use App\Models\PaymentMethod;
+use App\Models\PointTransaction;
 use App\Models\Product;
 use App\Models\Tenant;
 use App\Models\TenantUser;
+use App\Models\User;
 use App\Services\BillingService;
 use App\Services\MidtransService;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -114,8 +117,8 @@ class CustomerController extends Controller
             'total_spending' => $totalSpending,
             'total_orders' => Order::where('user_id', $user->id)->count(),
             'completed_orders' => Order::where('user_id', $user->id)->where('status', 'completed')->count(),
-            'reward_points' => 1250,
-            'available_vouchers' => 5,
+            'reward_points' => $this->customerRewardPoints($user),
+            'available_vouchers' => $this->customerAvailableVouchers($user),
             'address_count' => $addresses->count(),
         ];
 
@@ -125,8 +128,8 @@ class CustomerController extends Controller
             'recentOrders' => $recentOrders,
             'orders' => $orders,
             'recommendations' => $recommendations,
-            'memberLevel' => 'Silver',
-            'pointsToNextLevel' => 300,
+            'memberLevel' => '',
+            'pointsToNextLevel' => 0,
             'addresses' => $addresses,
             'bankAccounts' => $bankAccounts,
             'complaints' => Complaint::where('user_id', $user->id)
@@ -432,6 +435,14 @@ class CustomerController extends Controller
 
     private function syncPendingOrders(MidtransService $midtrans, int $userId): void
     {
+        // Hit API Midtrans per request dashboard itu boros: poll ulang cukup
+        // 5 menit sekali per user.
+        $cacheKey = "sync_pending_orders.{$userId}";
+        if (Cache::has($cacheKey)) {
+            return;
+        }
+        Cache::put($cacheKey, true, now()->addMinutes(5));
+
         $pendingOrders = Order::where('user_id', $userId)
             ->where('payment_status', 'unpaid')
             ->whereNotNull('midtrans_transaction_id')
@@ -454,6 +465,17 @@ class CustomerController extends Controller
                     'payment_status' => 'paid',
                     'status' => 'confirmed',
                     'midtrans_transaction_id' => $transactionId,
+                ]);
+            }
+
+            if (in_array($transactionStatus, ['deny', 'cancel', 'expire'])) {
+                if ($order->payment_status !== 'failed') {
+                    $order->restoreStock();
+                }
+
+                $order->update([
+                    'payment_status' => 'failed',
+                    'status' => 'cancelled',
                 ]);
             }
 
@@ -549,5 +571,43 @@ class CustomerController extends Controller
         $complaint->delete();
 
         return back()->with('success', 'Komplain berhasil dibatalkan.');
+    }
+
+    /**
+     * Saldo poin reward user = (total earn - total redeem) di semua toko.
+     */
+    protected function customerRewardPoints(User $user): int
+    {
+        $customerIds = Customer::where('user_id', $user->id)->pluck('id');
+
+        if ($customerIds->isEmpty()) {
+            return 0;
+        }
+
+        return PointTransaction::whereIn('customer_id', $customerIds)
+            ->get()
+            ->sum(fn (PointTransaction $point) => $point->type === 'earn' ? $point->points : -$point->points);
+    }
+
+    /**
+     * Jumlah voucher yang belum dipakai dan masih berlaku.
+     */
+    protected function customerAvailableVouchers(User $user): int
+    {
+        $customerIds = Customer::where('user_id', $user->id)->pluck('id');
+
+        if ($customerIds->isEmpty()) {
+            return 0;
+        }
+
+        return DB::table('customer_voucher as cv')
+            ->join('vouchers as v', 'v.id', '=', 'cv.voucher_id')
+            ->whereIn('cv.customer_id', $customerIds)
+            ->whereNull('cv.redeemed_at')
+            ->where('v.is_active', true)
+            ->whereNull('v.deleted_at')
+            ->where('v.valid_from', '<=', now())
+            ->where('v.valid_until', '>=', now())
+            ->count();
     }
 }

@@ -116,7 +116,7 @@ export function AppSidebar() {
             href: customers.index().url,
             icon: Users,
             group: 'Master Data',
-            permission: 'manage-categories',
+            permission: 'manage-customers',
         },
         {
             title: 'Vouchers',
@@ -172,7 +172,7 @@ export function AppSidebar() {
             href: onlineOrders.index().url,
             icon: Globe,
             group: 'Transactions',
-            permission: 'manage-pos',
+            permission: 'manage-orders',
             subscription: 'premium',
         },
         {
@@ -187,6 +187,7 @@ export function AppSidebar() {
             href: route('tenant.chat.index'),
             icon: MessageSquare,
             group: 'Marketplace',
+            permission: 'manage-orders',
             subscription: 'premium',
         },
         {
@@ -194,6 +195,7 @@ export function AppSidebar() {
             href: route('tenant.reviews.index'),
             icon: Star,
             group: 'Marketplace',
+            permission: 'manage-orders',
             subscription: 'premium',
         },
         {

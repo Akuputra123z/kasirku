@@ -91,14 +91,37 @@ class BillingService
     {
         $subscription = Subscription::where('midtrans_order_id', $orderId)->firstOrFail();
 
-        $currentExpiry = $subscription->tenant->subscription_expires_at;
+        // Idempotency: pembayaran yang sama (transaction_id Midtrans sama) tidak
+        // boleh memperpanjang langganan dua kali. Midtrans me-retry notifikasi
+        // settlement puluhan kali, dan replay order_id adalah serangan umum.
+        if ($subscription->status === 'paid'
+            && $midtransTransactionId
+            && $midtransTransactionId === $subscription->midtrans_transaction_id) {
+            return;
+        }
+
+        // Aman jika midtrans_transaction_id tidak tersedia (mis. via polling):
+        // hanya proses sekali per langganan untuk paket yang sama.
+        $lockedSubscription = Subscription::whereKey($subscription->id)->lockForUpdate()->first();
+
+        if (! $lockedSubscription) {
+            return;
+        }
+
+        if ($lockedSubscription->status === 'paid'
+            && ($midtransTransactionId === null
+                || $midtransTransactionId === $lockedSubscription->midtrans_transaction_id)) {
+            return;
+        }
+
+        $currentExpiry = $lockedSubscription->tenant->subscription_expires_at;
         $base = $currentExpiry?->isFuture() ? $currentExpiry->copy() : now();
-        $expiresAt = match ($subscription->package) {
+        $expiresAt = match ($lockedSubscription->package) {
             'monthly' => $base->addMonth(),
             'yearly' => $base->addYear(),
         };
 
-        DB::transaction(function () use ($subscription, $expiresAt, $midtransTransactionId, $statusResponse) {
+        DB::transaction(function () use ($lockedSubscription, $expiresAt, $midtransTransactionId, $statusResponse) {
             $update = [
                 'status' => 'paid',
                 'started_at' => now(),
@@ -113,17 +136,17 @@ class BillingService
                 $update['payment_payload'] = $statusResponse;
             }
 
-            $subscription->update($update);
+            $lockedSubscription->update($update);
 
-            $subscription->tenant->update([
+            $lockedSubscription->tenant->update([
                 'subscription_tier' => 'premium',
                 'subscription_expires_at' => $expiresAt,
             ]);
         });
 
-        $this->subscription->clearCache($subscription->tenant);
+        $this->subscription->clearCache($lockedSubscription->tenant);
 
-        SubscriptionPaid::dispatch($subscription);
+        SubscriptionPaid::dispatch($lockedSubscription);
     }
 
     private function cancelPendingTransactions(Tenant $tenant, ?string $package = null): void

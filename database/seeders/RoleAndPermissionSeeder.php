@@ -31,6 +31,7 @@ class RoleAndPermissionSeeder extends Seeder
             'manage-purchases',
             'manage-stock',
             'manage-customers',
+            'manage-orders',
         ];
 
         foreach ($permissions as $permission) {
@@ -49,6 +50,7 @@ class RoleAndPermissionSeeder extends Seeder
             'manage-vouchers',
             'manage-suppliers',
             'manage-customers',
+            'manage-orders',
         ]);
 
         $kasir = Role::firstOrCreate(['name' => 'kasir', 'guard_name' => 'web', 'tenant_id' => $tenantId]);

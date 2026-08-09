@@ -24,6 +24,15 @@ class ReportController extends Controller
         ];
     }
 
+    /**
+     * Bulatkan nilai uang ke 2 desimal sebelum dikirim ke frontend agar
+     * drift float (0.1 + 0.2) tidak sampai ke antarmuka.
+     */
+    protected function roundMoney(mixed $value): float
+    {
+        return round((float) $value, 2);
+    }
+
     protected function getPosSummary($startDate, $endDate)
     {
         return Transaction::whereBetween('created_at', $this->dateRange($startDate, $endDate))
@@ -135,7 +144,7 @@ class ReportController extends Controller
             $merged[$d->date] = [
                 'date' => $d->date,
                 'pos_count' => (int) $d->transactions_count,
-                'pos_revenue' => (float) $d->revenue,
+                'pos_revenue' => $this->roundMoney($d->revenue),
             ];
         }
 
@@ -148,7 +157,7 @@ class ReportController extends Controller
                 ];
             }
             $merged[$d->date]['market_count'] = (int) $d->transactions_count;
-            $merged[$d->date]['market_revenue'] = (float) $d->revenue;
+            $merged[$d->date]['market_revenue'] = $this->roundMoney($d->revenue);
         }
 
         return collect($merged)->sortByDesc('date')->values();
@@ -162,7 +171,7 @@ class ReportController extends Controller
             $merged[$p->name] = [
                 'name' => $p->name,
                 'total_qty' => (int) $p->total_qty,
-                'total_sales' => (float) $p->total_sales,
+                'total_sales' => $this->roundMoney($p->total_sales),
                 'source' => 'kasir',
             ];
         }
@@ -170,13 +179,15 @@ class ReportController extends Controller
         foreach ($marketplaceProducts as $p) {
             if (isset($merged[$p->name])) {
                 $merged[$p->name]['total_qty'] += (int) $p->total_qty;
-                $merged[$p->name]['total_sales'] += (float) $p->total_sales;
+                $merged[$p->name]['total_sales'] = $this->roundMoney(
+                    $merged[$p->name]['total_sales'] + $p->total_sales
+                );
                 $merged[$p->name]['source'] = 'gabungan';
             } else {
                 $merged[$p->name] = [
                     'name' => $p->name,
                     'total_qty' => (int) $p->total_qty,
-                    'total_sales' => (float) $p->total_sales,
+                    'total_sales' => $this->roundMoney($p->total_sales),
                     'source' => 'marketplace',
                 ];
             }
@@ -230,9 +241,9 @@ class ReportController extends Controller
                 'order_number' => $order->order_number,
                 'customer_name' => $order->recipient_name,
                 'customer_phone' => $order->customer_phone,
-                'subtotal' => (float) $order->subtotal,
-                'shipping_cost' => (float) $order->shipping_cost,
-                'total' => (float) $order->total,
+                'subtotal' => $this->roundMoney($order->subtotal),
+                'shipping_cost' => $this->roundMoney($order->shipping_cost),
+                'total' => $this->roundMoney($order->total),
                 'status' => $order->status,
                 'payment_status' => $order->payment_status,
                 'payment_method' => $order->payment_method,
@@ -256,9 +267,9 @@ class ReportController extends Controller
                 'customer_name' => $order->ppob_customer_name ?? $order->recipient_name,
                 'category' => $order->ppob_category,
                 'brand' => $order->ppob_brand,
-                'total' => (float) $order->total,
-                'seller_price' => (float) ($order->ppob_seller_price ?? 0),
-                'markup' => (float) ($order->ppob_markup ?? 0),
+                'total' => $this->roundMoney($order->total),
+                'seller_price' => $this->roundMoney($order->ppob_seller_price ?? 0),
+                'markup' => $this->roundMoney($order->ppob_markup ?? 0),
                 'status' => $order->status,
                 'digiflazz_status' => $order->digiflazz_status,
                 'created_at' => $order->created_at,
@@ -302,12 +313,12 @@ class ReportController extends Controller
             : 0;
 
         return [
-            'current' => $currentTotal,
-            'previous' => $prevTotal,
+            'current' => $this->roundMoney($currentTotal),
+            'previous' => $this->roundMoney($prevTotal),
             'percentage' => $growthPercentage,
-            'pos_current' => $currentPos,
-            'marketplace_current' => $currentMarket,
-            'ppob_current' => $currentPpob,
+            'pos_current' => $this->roundMoney($currentPos),
+            'marketplace_current' => $this->roundMoney($currentMarket),
+            'ppob_current' => $this->roundMoney($currentPpob),
         ];
     }
 
@@ -345,12 +356,12 @@ class ReportController extends Controller
                     'user_name' => $shift->user?->name ?? 'Unknown',
                     'start_time' => $shift->start_time,
                     'end_time' => $shift->end_time,
-                    'starting_cash' => (float) $shift->starting_cash,
-                    'expected_cash' => (float) ($shift->expected_cash ?? $expected),
-                    'actual_cash' => (float) ($shift->actual_cash ?? 0),
+                    'starting_cash' => $this->roundMoney($shift->starting_cash),
+                    'expected_cash' => $this->roundMoney($shift->expected_cash ?? $expected),
+                    'actual_cash' => $this->roundMoney($shift->actual_cash ?? 0),
                     'transactions_count' => (int) ($shift->transactions_count ?? 0),
-                    'total_sales' => (float) $sales,
-                    'difference' => (float) (($shift->actual_cash ?? 0) - ($shift->expected_cash ?? $expected)),
+                    'total_sales' => $this->roundMoney($sales),
+                    'difference' => $this->roundMoney(($shift->actual_cash ?? 0) - ($shift->expected_cash ?? $expected)),
                     'is_closed' => $shift->end_time !== null,
                 ];
             });
@@ -358,9 +369,9 @@ class ReportController extends Controller
         $shiftSummary = [
             'total_shifts' => $shiftReports->count(),
             'closed_shifts' => $shiftReports->where('is_closed', true)->count(),
-            'total_expected' => $shiftReports->sum('expected_cash'),
-            'total_actual' => $shiftReports->sum('actual_cash'),
-            'total_difference' => $shiftReports->sum('difference'),
+            'total_expected' => $this->roundMoney($shiftReports->sum('expected_cash')),
+            'total_actual' => $this->roundMoney($shiftReports->sum('actual_cash')),
+            'total_difference' => $this->roundMoney($shiftReports->sum('difference')),
         ];
 
         // Marketplace
@@ -381,15 +392,15 @@ class ReportController extends Controller
         $growth = $this->getGrowth($startDate, $endDate);
 
         $mergedSummary = [
-            'total_revenue' => $summary->total_revenue + $marketplaceSummary->total_revenue,
-            'total_pos' => $summary->total_revenue,
-            'total_marketplace' => $marketplaceSummary->total_revenue,
-            'total_ppob' => $ppobSummary->total_revenue,
+            'total_revenue' => $this->roundMoney($summary->total_revenue + $marketplaceSummary->total_revenue),
+            'total_pos' => $this->roundMoney($summary->total_revenue),
+            'total_marketplace' => $this->roundMoney($marketplaceSummary->total_revenue),
+            'total_ppob' => $this->roundMoney($ppobSummary->total_revenue),
             'total_transactions' => $summary->total_transactions + $marketplaceSummary->total_orders,
             'total_marketplace_orders' => $marketplaceSummary->total_orders,
             'total_ppob_orders' => $ppobSummary->total_orders,
             'total_pos_transactions' => $summary->total_transactions,
-            'ppob_margin' => $ppobSummary->total_margin,
+            'ppob_margin' => $this->roundMoney($ppobSummary->total_margin),
         ];
 
         return Inertia::render('reports/index', [

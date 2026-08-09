@@ -82,7 +82,7 @@ Route::middleware('marketplace.context')->group(function () {
         Route::get('/rajaongkir/provinces', [RajaOngkirController::class, 'provinces'])->name('marketplace.rajaongkir.provinces');
         Route::get('/rajaongkir/cities/{provinceId}', [RajaOngkirController::class, 'cities'])->name('marketplace.rajaongkir.cities');
         Route::get('/rajaongkir/districts/{cityId}', [RajaOngkirController::class, 'districts'])->name('marketplace.rajaongkir.districts');
-        Route::post('/rajaongkir/cost', [RajaOngkirController::class, 'cost'])->name('marketplace.rajaongkir.cost');
+        Route::post('/rajaongkir/cost', [RajaOngkirController::class, 'cost'])->name('marketplace.rajaongkir.cost')->middleware('throttle:30,1');
 
         Route::get('/ppob', [PpobController::class, 'index'])->name('marketplace.ppob');
         Route::get('/ppob/{category}', [PpobController::class, 'products'])->name('marketplace.ppob.products');
@@ -101,11 +101,15 @@ Route::middleware('marketplace.context')->group(function () {
 
 // ─── Midtrans Webhook ──────────────────────────────────────────────────────
 
-Route::post('/webhook/midtrans', [MidtransController::class, 'notification'])->name('webhook.midtrans');
+Route::post('/webhook/midtrans', [MidtransController::class, 'notification'])
+    ->middleware('throttle:60,1')
+    ->name('webhook.midtrans');
 
 // ─── Old landing / auth routes ─────────────────────────────────────────────
 
-Route::post('register/store', RegisterStoreController::class)->name('stores.register');
+Route::post('register/store', RegisterStoreController::class)
+    ->middleware('throttle:10,10')
+    ->name('stores.register');
 
 Route::name('admin.')->group(function () {
     Route::middleware(['guest', 'central.context'])->group(function () {
@@ -142,11 +146,33 @@ Route::name('admin.')->group(function () {
 // Fallback untuk serving uploaded files ketika symlink public/storage tidak ada
 // (hosting sering disable exec()/symlink() sehingga php artisan storage:link gagal)
 Route::get('storage/{path}', function (string $path) {
+    // Allowlist mime aman — file lain (HTML/SVG/JS) DITOLAK untuk mencegah
+    // stored-XSS lewat upload gambar yang disalahgunakan.
+    $safeMimeByExtension = [
+        'png' => 'image/png',
+        'jpg' => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'webp' => 'image/webp',
+        'gif' => 'image/gif',
+        'avif' => 'image/avif',
+        'pdf' => 'application/pdf',
+    ];
+
+    $extension = strtolower(pathinfo($path, \PATHINFO_EXTENSION));
+
+    if (! isset($safeMimeByExtension[$extension])) {
+        abort(404);
+    }
+
     $fullPath = storage_path('app/public/'.$path);
 
     if (! file_exists($fullPath)) {
         abort(404);
     }
 
-    return response()->file($fullPath);
+    return response()->file($fullPath, [
+        'Content-Type' => $safeMimeByExtension[$extension],
+        'X-Content-Type-Options' => 'nosniff',
+        'Content-Security-Policy' => "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'",
+    ]);
 })->where('path', '[a-zA-Z0-9_/.-]+');

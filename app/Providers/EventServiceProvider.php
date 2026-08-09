@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Events\SubscriptionExpired;
+use App\Events\SubscriptionExpiring;
 use App\Events\SubscriptionPaid;
 use App\Listeners\NotifySubscriptionExpiring;
 use App\Listeners\SendSubscriptionInvoice;
@@ -15,6 +16,9 @@ class EventServiceProvider extends ServiceProvider
             SendSubscriptionInvoice::class,
         ],
         SubscriptionExpired::class => [
+            NotifySubscriptionExpiring::class,
+        ],
+        SubscriptionExpiring::class => [
             NotifySubscriptionExpiring::class,
         ],
     ];

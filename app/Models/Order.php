@@ -41,6 +41,7 @@ class Order extends Model
         'shipping_courier',
         'shipping_service',
         'tracking_number',
+        'stock_restored_at',
     ];
 
     protected $casts = [
@@ -103,5 +104,28 @@ class Order extends Model
         return $this->type === 'ppob'
             && $this->payment_status === 'paid'
             && $this->digiflazz_status === null;
+    }
+
+    /**
+     * Kembalikan stok produk/varian yang dikunci saat checkout untuk pesanan
+     * yang gagal dibayar / dibatalkan. Idempotent: hanya berjalan sekali.
+     */
+    public function restoreStock(): void
+    {
+        if ($this->stock_restored_at) {
+            return;
+        }
+
+        foreach ($this->items as $item) {
+            if ($item->product_id) {
+                Product::whereKey($item->product_id)->increment('stock', $item->quantity);
+            }
+
+            if ($item->product_variant_id) {
+                ProductVariant::whereKey($item->product_variant_id)->increment('stock', $item->quantity);
+            }
+        }
+
+        $this->update(['stock_restored_at' => now()]);
     }
 }

@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Marketplace;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cart;
+use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -52,6 +54,15 @@ class CartController extends Controller
             'quantity' => ['required', 'integer', 'min:1'],
         ]);
 
+        $product = Product::findOrFail($validated['product_id']);
+
+        if ($validated['product_variant_id']) {
+            $variant = ProductVariant::findOrFail($validated['product_variant_id']);
+
+            // Varian harus milik produk tersebut (anti manipulasi kombinasi).
+            abort_unless($variant->product_id === $product->id, 422, 'Varian tidak cocok dengan produk.');
+        }
+
         $existing = Cart::where('user_id', Auth::id())
             ->where('product_id', $validated['product_id'])
             ->where('product_variant_id', $validated['product_variant_id'])
@@ -75,6 +86,9 @@ class CartController extends Controller
 
     public function update(Request $request, Cart $cart)
     {
+        // IDOR: keranjang hanya boleh diubah oleh pemiliknya.
+        abort_unless($cart->user_id === Auth::id(), 403);
+
         $validated = $request->validate([
             'quantity' => ['required', 'integer', 'min:1', 'max:999'],
         ]);
@@ -86,6 +100,9 @@ class CartController extends Controller
 
     public function remove(Cart $cart)
     {
+        // IDOR: keranjang hanya boleh dihapus oleh pemiliknya.
+        abort_unless($cart->user_id === Auth::id(), 403);
+
         $cart->delete();
 
         return redirect()->back()->with('success', 'Produk dihapus dari keranjang');
